@@ -25,3 +25,4 @@ Icon?
 
 ### Local installer artifact to keep out of source control
 /Resources/Microsoft_Office_Reset_2.0.0b1.pkg
+/Resources/Microsoft_Office_Reset_2.0.0b1_expanded/

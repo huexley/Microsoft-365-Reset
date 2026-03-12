@@ -58,10 +58,18 @@ restartMode="Restart Confirm"
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --mode)
+            if [[ -z "${2:-}" || "${2}" == -* ]]; then
+                echo "Missing or invalid value for --mode. Usage: $0 [--mode MODE] [--operations CSV]"
+                exit 10
+            fi
             operationMode="$2"
             shift 2
             ;;
         --operations)
+            if [[ -z "${2:-}" || "${2}" == -* ]]; then
+                echo "Missing or invalid value for --operations. Usage: $0 [--mode MODE] [--operations CSV]"
+                exit 10
+            fi
             operationCSV="$2"
             shift 2
             ;;
@@ -205,10 +213,10 @@ trap cleanup EXIT
 function getLoggedInUser() {
     local consoleUser
     consoleUser="$(/bin/echo 'show State:/Users/ConsoleUser' | /usr/sbin/scutil | /usr/bin/awk '/Name :/&&!/loginwindow/{print $3}')"
-    if [[ -n "${consoleUser}" ]]; then
+    if [[ -n "${consoleUser}" && "${consoleUser}" != "root" ]]; then
         echo "${consoleUser}"
     else
-        echo "${USER}"
+        echo ""
     fi
 }
 
@@ -309,30 +317,87 @@ function findKeychainDB() {
 
 function findEntryGenericByLabel() {
     local label="$1"
-    /usr/bin/security find-generic-password -l "${label}" >/dev/null 2>&1
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security find-generic-password -l "${label}" >/dev/null 2>&1
+    else
+        /usr/bin/security find-generic-password -l "${label}" >/dev/null 2>&1
+    fi
 }
 
 function findEntryGenericByService() {
     local service="$1"
-    /usr/bin/security find-generic-password -s "${service}" >/dev/null 2>&1
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security find-generic-password -s "${service}" >/dev/null 2>&1
+    else
+        /usr/bin/security find-generic-password -s "${service}" >/dev/null 2>&1
+    fi
 }
 
 function findEntryGenericByCreator() {
     local creator="$1"
-    /usr/bin/security find-generic-password -G "${creator}" >/dev/null 2>&1
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security find-generic-password -G "${creator}" >/dev/null 2>&1
+    else
+        /usr/bin/security find-generic-password -G "${creator}" >/dev/null 2>&1
+    fi
+}
+
+function deleteGenericByLabel() {
+    local label="$1"
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security delete-generic-password -l "${label}" >>"${scriptLog}" 2>&1
+    else
+        /usr/bin/security delete-generic-password -l "${label}" >>"${scriptLog}" 2>&1
+    fi
+}
+
+function deleteGenericByService() {
+    local service="$1"
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security delete-generic-password -s "${service}" >>"${scriptLog}" 2>&1
+    else
+        /usr/bin/security delete-generic-password -s "${service}" >>"${scriptLog}" 2>&1
+    fi
+}
+
+function deleteInternetByService() {
+    local service="$1"
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security delete-internet-password -s "${service}" >>"${scriptLog}" 2>&1
+    else
+        /usr/bin/security delete-internet-password -s "${service}" >>"${scriptLog}" 2>&1
+    fi
+}
+
+function deleteGenericByCreator() {
+    local creator="$1"
+    local user="${2:-}"
+    if [[ -n "${user}" ]]; then
+        runAsUser "${user}" /usr/bin/security delete-generic-password -G "${creator}" >>"${scriptLog}" 2>&1
+    else
+        /usr/bin/security delete-generic-password -G "${creator}" >>"${scriptLog}" 2>&1
+    fi
 }
 
 function deleteGenericByLabelLoop() {
     local label="$1"
-    while findEntryGenericByLabel "${label}"; do
-        /usr/bin/security delete-generic-password -l "${label}" >>"${scriptLog}" 2>&1 || break
+    local user="${2:-}"
+    while findEntryGenericByLabel "${label}" "${user}"; do
+        deleteGenericByLabel "${label}" "${user}" || break
     done
 }
 
 function deleteGenericByCreatorLoop() {
     local creator="$1"
-    while findEntryGenericByCreator "${creator}"; do
-        /usr/bin/security delete-generic-password -G "${creator}" >>"${scriptLog}" 2>&1 || break
+    local user="${2:-}"
+    while findEntryGenericByCreator "${creator}" "${user}"; do
+        deleteGenericByCreator "${creator}" "${user}" || break
     done
 }
 
@@ -401,7 +466,7 @@ function repairFromMicrosoftPkg() {
     expectedSize="$(contentLengthForURL "${pkgURL}")"
 
     info "Starting package download for ${appName}: ${pkgURL}"
-    /usr/bin/nscurl --background --download --large-download --location --download-directory "${downloadFolder}" "${pkgURL}" >>"${scriptLog}" 2>&1 || return 1
+    /usr/bin/nscurl --download --large-download --location --download-directory "${downloadFolder}" "${pkgURL}" >>"${scriptLog}" 2>&1 || return 1
 
     if [[ ! -f "${downloadFolder}${pkgName}" ]]; then
         errorOut "Downloaded package missing for ${appName}"
@@ -789,12 +854,12 @@ function startProgressDialog() {
         --title "${humanReadableScriptName}" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message "Running selected operations …" \
+        --message "Running selected operations ..." \
         --icon "SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810" \
         --commandfile "${dialogCommandFile}" \
         --button1disabled \
         --progress 100 \
-        --progresstext "Starting …" &
+        --progresstext "Starting ..." &
 
     sleep 1
 }
@@ -1311,24 +1376,24 @@ function op_reset_outlook() {
 
     ensureLoginKeychainPresent "${loggedInUser}" "${loggedInUserHome}"
 
-    /usr/bin/security delete-internet-password -s 'msoCredentialSchemeADAL' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-internet-password -s 'msoCredentialSchemeLiveId' >>"${scriptLog}" 2>&1
+    deleteInternetByService 'msoCredentialSchemeADAL' "${loggedInUser}"
+    deleteInternetByService 'msoCredentialSchemeLiveId' "${loggedInUser}"
 
-    deleteGenericByCreatorLoop 'MSOpenTech.ADAL.1'
+    deleteGenericByCreatorLoop 'MSOpenTech.ADAL.1' "${loggedInUser}"
 
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Cache 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Cache 3' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Settings 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Settings 3' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Ticket Cache' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Ticket Cache 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.adalcache' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OutlookCore.Secret' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'Microsoft Office Identities Cache 2' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Cache 3' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Settings 2' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Settings 3' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Ticket Cache' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Ticket Cache 2' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.adalcache' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OutlookCore.Secret' "${loggedInUser}"
 
-    deleteGenericByLabelLoop 'com.helpshift.data_com.microsoft.Outlook'
-    deleteGenericByLabelLoop 'MicrosoftOfficeRMSCredential'
-    deleteGenericByLabelLoop 'MSProtection.framework.service'
-    deleteGenericByLabelLoop 'Exchange'
+    deleteGenericByLabelLoop 'com.helpshift.data_com.microsoft.Outlook' "${loggedInUser}"
+    deleteGenericByLabelLoop 'MicrosoftOfficeRMSCredential' "${loggedInUser}"
+    deleteGenericByLabelLoop 'MSProtection.framework.service' "${loggedInUser}"
+    deleteGenericByLabelLoop 'Exchange' "${loggedInUser}"
 
     return 0
 }
@@ -1485,15 +1550,15 @@ function op_reset_onedrive() {
 
     ensureLoginKeychainPresent "${loggedInUser}" "${loggedInUserHome}"
 
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDrive.FinderSync.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDrive.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDriveUpdater.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDriveStandaloneUpdater.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'OneDrive Standalone Cached Credential Business - Business1' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'OneDrive Standalone Cached Credential' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -s 'com.microsoft.onedrive.cookies' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -s 'OneAuthAccount' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.adalcache' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'com.microsoft.OneDrive.FinderSync.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDrive.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDriveUpdater.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDriveStandaloneUpdater.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'OneDrive Standalone Cached Credential Business - Business1' "${loggedInUser}"
+    deleteGenericByLabel 'OneDrive Standalone Cached Credential' "${loggedInUser}"
+    deleteGenericByService 'com.microsoft.onedrive.cookies' "${loggedInUser}"
+    deleteGenericByService 'OneAuthAccount' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.adalcache' "${loggedInUser}"
 
     safeRemove "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.com.microsoft.oneauth"
 
@@ -1599,13 +1664,13 @@ function op_reset_teams() {
 
     ensureLoginKeychainPresent "${loggedInUser}" "${loggedInUserHome}"
 
-    deleteGenericByLabelLoop 'Microsoft Teams Identities Cache'
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'Teams Safe Storage' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'Microsoft Teams (work or school) Safe Storage' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'teamsIv' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'teamsKey' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'com.microsoft.teams.HockeySDK' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'com.microsoft.teams.helper.HockeySDK' >>"${scriptLog}" 2>&1
+    deleteGenericByLabelLoop 'Microsoft Teams Identities Cache' "${loggedInUser}"
+    deleteGenericByLabel 'Teams Safe Storage' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Teams (work or school) Safe Storage' "${loggedInUser}"
+    deleteGenericByLabel 'teamsIv' "${loggedInUser}"
+    deleteGenericByLabel 'teamsKey' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.teams.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.teams.helper.HockeySDK' "${loggedInUser}"
 
     return 0
 }
@@ -1698,45 +1763,45 @@ function op_reset_credentials() {
 
     ensureLoginKeychainPresent "${loggedInUser}" "${loggedInUserHome}"
 
-    /usr/bin/security delete-generic-password -s 'OneAuthAccount' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-internet-password -s 'msoCredentialSchemeADAL' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-internet-password -s 'msoCredentialSchemeLiveId' >>"${scriptLog}" 2>&1
+    deleteGenericByService 'OneAuthAccount' "${loggedInUser}"
+    deleteInternetByService 'msoCredentialSchemeADAL' "${loggedInUser}"
+    deleteInternetByService 'msoCredentialSchemeLiveId' "${loggedInUser}"
 
-    deleteGenericByCreatorLoop 'MSOpenTech.ADAL.1'
+    deleteGenericByCreatorLoop 'MSOpenTech.ADAL.1' "${loggedInUser}"
 
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Cache 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Cache 3' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Settings 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Identities Settings 3' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Ticket Cache' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Microsoft Office Ticket Cache 2' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.adalcache' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'Microsoft Office Identities Cache 2' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Cache 3' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Settings 2' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Identities Settings 3' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Ticket Cache' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Office Ticket Cache 2' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.adalcache' "${loggedInUser}"
 
-    deleteGenericByCreatorLoop 'Microsoft Office Data'
+    deleteGenericByCreatorLoop 'Microsoft Office Data' "${loggedInUser}"
 
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OutlookCore.Secret' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'com.microsoft.OutlookCore.Secret' "${loggedInUser}"
 
-    deleteGenericByLabelLoop 'com.helpshift.data_com.microsoft.Outlook'
-    deleteGenericByLabelLoop 'MicrosoftOfficeRMSCredential'
-    deleteGenericByLabelLoop 'MSProtection.framework.service'
-    deleteGenericByLabelLoop 'Exchange'
+    deleteGenericByLabelLoop 'com.helpshift.data_com.microsoft.Outlook' "${loggedInUser}"
+    deleteGenericByLabelLoop 'MicrosoftOfficeRMSCredential' "${loggedInUser}"
+    deleteGenericByLabelLoop 'MSProtection.framework.service' "${loggedInUser}"
+    deleteGenericByLabelLoop 'Exchange' "${loggedInUser}"
 
-    deleteGenericByLabelLoop 'Microsoft Teams Identities Cache'
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'Teams Safe Storage' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'Microsoft Teams (work or school) Safe Storage' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'teamsIv' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'teamsKey' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'com.microsoft.teams.HockeySDK' >>"${scriptLog}" 2>&1
-    runAsUser "${loggedInUser}" /usr/bin/security delete-generic-password -l 'com.microsoft.teams.helper.HockeySDK' >>"${scriptLog}" 2>&1
+    deleteGenericByLabelLoop 'Microsoft Teams Identities Cache' "${loggedInUser}"
+    deleteGenericByLabel 'Teams Safe Storage' "${loggedInUser}"
+    deleteGenericByLabel 'Microsoft Teams (work or school) Safe Storage' "${loggedInUser}"
+    deleteGenericByLabel 'teamsIv' "${loggedInUser}"
+    deleteGenericByLabel 'teamsKey' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.teams.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.teams.helper.HockeySDK' "${loggedInUser}"
 
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDrive.FinderSync.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDrive.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDriveUpdater.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'com.microsoft.OneDriveStandaloneUpdater.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'OneDrive Standalone Cached Credential Business - Business1' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'OneDrive Standalone Cached Credential' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -s 'com.microsoft.onedrive.cookies' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -s 'OneAuthAccount' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'com.microsoft.OneDrive.FinderSync.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDrive.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDriveUpdater.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'com.microsoft.OneDriveStandaloneUpdater.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'OneDrive Standalone Cached Credential Business - Business1' "${loggedInUser}"
+    deleteGenericByLabel 'OneDrive Standalone Cached Credential' "${loggedInUser}"
+    deleteGenericByService 'com.microsoft.onedrive.cookies' "${loggedInUser}"
+    deleteGenericByService 'OneAuthAccount' "${loggedInUser}"
 
     safeRemove "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/mip_policy"
     safeRemove "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/DRM_Evo.plist"
@@ -1820,8 +1885,8 @@ function op_remove_skypeforbusiness() {
 
     ensureLoginKeychainPresent "${loggedInUser}" "${loggedInUserHome}"
 
-    /usr/bin/security delete-generic-password -l 'com.microsoft.SkypeForBusiness.HockeySDK' >>"${scriptLog}" 2>&1
-    /usr/bin/security delete-generic-password -l 'Skype for Business' >>"${scriptLog}" 2>&1
+    deleteGenericByLabel 'com.microsoft.SkypeForBusiness.HockeySDK' "${loggedInUser}"
+    deleteGenericByLabel 'Skype for Business' "${loggedInUser}"
 
     safeRemove "/Applications/Skype for Business.app"
 
@@ -1984,20 +2049,25 @@ function preflightChecks() {
     [[ -f "${scriptLog}" ]] || touch "${scriptLog}" || fatal "Unable to create log file ${scriptLog}"
 
     preFlight "\n\n###\n# ${humanReadableScriptName} (${scriptVersion})\n# https://snelson.us\n#\n# Operation Mode: ${operationMode}\n####\n\n"
-    preFlight "Initiating …"
+    preFlight "Initiating ..."
 
     if [[ $(id -u) -ne 0 ]]; then
         fatal "This script must run as root"
     fi
 
-    loggedInUser="$(echo "show State:/Users/ConsoleUser" | scutil | awk '/Name :/ { print $3 }')"
-    [[ -z "${loggedInUser}" || "${loggedInUser}" == "loginwindow" ]] && loggedInUser="${USER}"
+    loggedInUser="$(getLoggedInUser)"
+    if [[ -z "${loggedInUser}" ]]; then
+        fatal "No non-root console user detected; refusing to run user-scoped operations"
+    fi
 
     loggedInUserFullname="$(id -F "${loggedInUser}" 2>/dev/null)"
     loggedInUserID="$(id -u "${loggedInUser}" 2>/dev/null)"
     loggedInUserHomeDirectory="$(dscl . read "/Users/${loggedInUser}" NFSHomeDirectory 2>/dev/null | awk -F ' ' '{print $2}')"
     if [[ -z "${loggedInUserHomeDirectory}" ]]; then
         loggedInUserHomeDirectory="$(setHomeFolder "${loggedInUser}")"
+    fi
+    if [[ -z "${loggedInUserHomeDirectory}" || "${loggedInUserHomeDirectory}" == "/var/root" ]]; then
+        fatal "Resolved unsafe home directory for user '${loggedInUser}': ${loggedInUserHomeDirectory}"
     fi
     loggedInUserHome="${loggedInUserHomeDirectory}"
 

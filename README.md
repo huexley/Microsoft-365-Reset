@@ -32,6 +32,7 @@ The script consolidates expanded package workflows into one root-run tool with:
 
 - macOS with `zsh`
 - Root execution (`sudo` or MDM root context)
+- Active non-root console user session (script exits during preflight if none is detected)
 - Network access for swiftDialog install/upgrade in interactive modes and Microsoft package download during auto-repair operations
 - Built-in tools used by the script (`security`, `defaults`, `pkgutil`, `installer`, `codesign`, `sqlite3`, `nscurl`, etc.)
 
@@ -181,7 +182,7 @@ sudo ./Microsoft-365-Reset.zsh "" "" "" "silent" "reset_autoupdate,reset_credent
 | Code | Meaning |
 |---|---|
 | `0` | Success |
-| `2` | User cancelled |
+| `2` | User cancelled or no operations provided in `silent` mode |
 | `10` | Preflight/validation failure |
 | `20` | One or more operations failed |
 

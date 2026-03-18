@@ -14,6 +14,9 @@
 #
 # HISTORY
 #
+# Version 0.0.1a5, 18-Mar-2026, Dan K. Snelson
+#  - Enabled moveable and minimizable window for `startProgressDialog()`
+#
 # Version 0.0.1a4, 18-Mar-2026, Dan K. Snelson
 #   - Improved Jamf parameter handling to skip all leading positionals regardless of count
 #
@@ -43,7 +46,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a4"
+scriptVersion="0.0.1a5"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -899,7 +902,7 @@ function confirmDestructiveSelection() {
         --title "Confirm Destructive Actions" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message ":red[**Warning:**] You selected one or more destructive actions that can permanently remove local data.\n\nConfirm to proceed." \
+        --message "**:red[Warning:]** You selected one or more destructive actions that can permanently remove local data.\n\nConfirm to proceed." \
         --icon "SF=exclamationmark.triangle, weight=bold, colour1=red" \
         --checkbox "I understand these actions are destructive,name=confirm_destructive,enableButton1" \
         --json \
@@ -934,6 +937,8 @@ function startProgressDialog() {
         --messagefont "size=${fontSize}" \
         --message "Running selected operations ..." \
         --icon "SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810" \
+        --moveable \
+        --windowbuttons "min" \
         --commandfile "${dialogCommandFile}" \
         --button1disabled \
         --progress 100 \

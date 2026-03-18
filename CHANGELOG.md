@@ -2,6 +2,9 @@
 
 ## Changelog
 
+### Version 0.0.1a5 (18-Mar-2026)
+- Enabled moveable and minimizable window for `startProgressDialog()`
+
 ### Version 0.0.1a4 (18-Mar-2026)
 - Improved Jamf parameter handling to skip all leading positionals regardless of count
 

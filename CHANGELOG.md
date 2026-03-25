@@ -2,6 +2,10 @@
 
 ## Changelog
 
+### Version 0.0.1a7 (25-Mar-2026)
+- Added `remove_acrobat_addin` as a standalone ancillary removal option for Adobe Acrobat add-in payloads in Word, Excel, and PowerPoint
+- Updated README operation and execution-order documentation for the new Acrobat add-in removal workflow
+
 ### Version 0.0.1a6 (25-Mar-2026)
 - Updated `startProgressDialog()` to show the resolved operation titles that will actually run in interactive modes
 - Wait for the background progress dialog to close before continuing

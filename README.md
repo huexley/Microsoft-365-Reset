@@ -1,4 +1,4 @@
-# Microsoft 365 Reset (0.0.1a6)
+# Microsoft 365 Reset (0.0.1a7)
 
 ![Microsoft 365 Reset](images/Microsoft_365_Reset.png)
 
@@ -109,6 +109,7 @@ Use these IDs in `--operations` CSV:
 | `remove_office` | Full Microsoft 365 removal workflow |
 | `remove_skypeforbusiness` | Remove Skype for Business app/data/keychain entries |
 | `remove_defender` | Remove Microsoft Defender app/data/receipts |
+| `remove_acrobat_addin` | Remove Adobe Acrobat add-in files for Word, Excel, and PowerPoint |
 | `remove_zoomplugin` | Remove Zoom Outlook plugin and related metadata |
 | `remove_webexpt` | Remove WebEx Productivity Tools and related metadata |
 
@@ -119,6 +120,7 @@ The script enforces package-equivalent dependencies:
 - Selecting `reset_factory` auto-adds `reset_word`, `reset_excel`, `reset_powerpoint`, `reset_outlook`, `reset_onenote`, `reset_onedrive`, `reset_teams`, `reset_autoupdate`, and `reset_credentials`
 - Selecting `reset_credentials` suppresses `reset_license`
 - Selecting `reset_teams_force` suppresses `reset_teams`
+- `remove_acrobat_addin` runs as a standalone operation with no dependency expansion or suppression
 - Selecting `remove_office` auto-adds `remove_skypeforbusiness`
 - Selecting `remove_office` suppresses reset-family selections
 
@@ -138,7 +140,7 @@ After dependency resolution, operations run in deterministic phases:
 
 1. Reset operations (`reset_*`)
 2. Data-removal operations (`remove_outlook_data`, `remove_onenote_data`)
-3. Ancillary removals (`remove_defender`, `remove_zoomplugin`, `remove_webexpt`, `remove_skypeforbusiness`)
+3. Ancillary removals (`remove_defender`, `remove_acrobat_addin`, `remove_zoomplugin`, `remove_webexpt`, `remove_skypeforbusiness`)
 4. Full remove (`remove_office`)
 
 If `remove_office` is selected, its preinstall-style teardown phase runs before the operation loop.
@@ -179,6 +181,14 @@ Silent run with explicit operations:
 sudo ./Microsoft-365-Reset.zsh \
   --mode silent \
   --operations reset_outlook,reset_credentials
+```
+
+Silent run to remove only the Adobe Acrobat add-in payloads:
+
+```bash
+sudo ./Microsoft-365-Reset.zsh \
+  --mode silent \
+  --operations remove_acrobat_addin
 ```
 
 Local dry invocation for parser checks (will fail root preflight by design):

@@ -14,6 +14,9 @@
 #
 # HISTORY
 #
+# Version 0.0.1a7, 25-Mar-2026, Dan K. Snelson
+#  - Added `remove_acrobat_addin` as a standalone Adobe Acrobat add-in removal operation
+#
 # Version 0.0.1a6, 25-Mar-2026, Dan K. Snelson
 #  - Added resolved operation summary to `startProgressDialog()`
 #  - Wait for the background progress dialog to close before continuing
@@ -51,7 +54,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a6"
+scriptVersion="0.0.1a7"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -167,6 +170,7 @@ operationIDs=(
     remove_office
     remove_skypeforbusiness
     remove_defender
+    remove_acrobat_addin
     remove_zoomplugin
     remove_webexpt
 )
@@ -189,6 +193,7 @@ operationTitle[reset_credentials]="Reset License and Sign-In"
 operationTitle[remove_office]="Completely remove Microsoft 365"
 operationTitle[remove_skypeforbusiness]="Remove Skype for Business"
 operationTitle[remove_defender]="Remove Defender"
+operationTitle[remove_acrobat_addin]="Remove Adobe Acrobat Add-in"
 operationTitle[remove_zoomplugin]="Remove Zoom Outlook Plugin"
 operationTitle[remove_webexpt]="Remove WebEx Productivity Tools"
 
@@ -210,6 +215,7 @@ operationDescription[reset_credentials]="Closes all apps and removes the Office 
 operationDescription[remove_office]="Removes all Microsoft 365 and Office apps, components, add-ins, templates and configuration data."
 operationDescription[remove_skypeforbusiness]="Closes Microsoft Skype for Business and then removes the application, configuration data, and keychain items."
 operationDescription[remove_defender]="Closes Microsoft Defender and then removes the application, configuration data, and keychain items."
+operationDescription[remove_acrobat_addin]="Removes the Adobe Acrobat add-in files for Word, Excel, and PowerPoint."
 operationDescription[remove_zoomplugin]="Removes the Zoom Plugin for Outlook and associated metadata."
 operationDescription[remove_webexpt]="Removes WebEx Productivity Tools associated metadata."
 
@@ -2288,6 +2294,29 @@ function op_remove_defender() {
     return 0
 }
 
+function op_remove_acrobat_addin() {
+    info "Starting operation: remove_acrobat_addin"
+
+    local addinPaths=(
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Excel/AcrobatExcelAddin.xlam"
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Powerpoint/SaveAsAdobePDF.ppam"
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Word/linkCreation.dotm"
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/Excel/AcrobatExcelAddin.xlam"
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/PowerPoint/SaveAsAdobePDF.ppam"
+        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/Word/linkCreation.dotm"
+        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/Excel/AcrobatExcelAddin.xlam"
+        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/PowerPoint/SaveAsAdobePDF.ppam"
+        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/Word/linkCreation.dotm"
+    )
+
+    local targetPath
+    for targetPath in "${addinPaths[@]}"; do
+        safeRemove "${targetPath}"
+    done
+
+    return 0
+}
+
 function op_remove_zoomplugin() {
     info "Starting operation: remove_zoomplugin"
 
@@ -2370,6 +2399,7 @@ function runOperation() {
         remove_office) op_remove_office ;;
         remove_skypeforbusiness) op_remove_skypeforbusiness ;;
         remove_defender) op_remove_defender ;;
+        remove_acrobat_addin) op_remove_acrobat_addin ;;
         remove_zoomplugin) op_remove_zoomplugin ;;
         remove_webexpt) op_remove_webexpt ;;
         *)
@@ -2394,7 +2424,7 @@ function sortOperationsByExecutionPhase() {
     done
 
     # ancillary removals
-    for op in remove_defender remove_zoomplugin remove_webexpt remove_skypeforbusiness; do
+    for op in remove_defender remove_acrobat_addin remove_zoomplugin remove_webexpt remove_skypeforbusiness; do
         isOperationSelected "${op}" && sorted+=("${op}")
     done
 

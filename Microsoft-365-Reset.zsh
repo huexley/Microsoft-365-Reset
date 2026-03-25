@@ -14,6 +14,10 @@
 #
 # HISTORY
 #
+# Version 0.0.1a8, 25-Mar-2026, Dan K. Snelson
+#  - Expanded `remove_acrobat_addin` cleanup targets to cover Startup and Startup.localized variants
+#  - Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal
+#
 # Version 0.0.1a7, 25-Mar-2026, Dan K. Snelson
 #  - Added `remove_acrobat_addin` as a standalone Adobe Acrobat add-in removal operation
 #
@@ -54,7 +58,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a7"
+scriptVersion="0.0.1a8"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -1093,6 +1097,55 @@ function promptForRestart() {
 # Operation Helpers
 #
 ####################################################################################################
+
+function waitForInteractiveAppQuit() {
+    local processName="$1"
+    local appName="$2"
+    local appIcon="$3"
+
+    [[ "${operationMode}" == "silent" ]] && return 0
+
+    if ! pgrep -x "${processName}" >/dev/null 2>&1; then
+        info "${appName} not running; proceeding"
+        return 0
+    fi
+
+    info "Waiting for ${appName} to quit before continuing"
+
+    [[ -n "${appIcon}" ]] && writeDialogCommand "icon: ${appIcon}"
+    writeDialogCommand "message: Please save open files and quit ${appName}."
+    writeDialogCommand "progresstext: Waiting for ${loggedInUser} to quit ${appName} ..."
+
+    while pgrep -x "${processName}" >/dev/null 2>&1; do
+        sleep 1
+    done
+
+    writeDialogCommand "message: ${appName} is no longer running."
+    writeDialogCommand "progresstext: Continuing ..."
+}
+
+function prepareForAcrobatAddinRemoval() {
+    if [[ "${operationMode}" == "silent" ]]; then
+        info "Silent mode: force-stopping Word, Excel, PowerPoint, and Acrobat before add-in removal"
+        pkill -9 'Microsoft Word' 2>/dev/null
+        pkill -9 'Microsoft Excel' 2>/dev/null
+        pkill -9 'Microsoft PowerPoint' 2>/dev/null
+        pkill -9 'AdobeAcrobat' 2>/dev/null
+        return 0
+    fi
+
+    writeDialogCommand "message: Please quit Word, Excel, PowerPoint, and Acrobat before removal."
+    writeDialogCommand "progresstext: Verifying required apps are closed ..."
+
+    waitForInteractiveAppQuit "Microsoft Word" "Microsoft Word" "/Applications/Microsoft Word.app"
+    waitForInteractiveAppQuit "Microsoft Excel" "Microsoft Excel" "/Applications/Microsoft Excel.app"
+    waitForInteractiveAppQuit "Microsoft PowerPoint" "Microsoft PowerPoint" "/Applications/Microsoft PowerPoint.app"
+    waitForInteractiveAppQuit "AdobeAcrobat" "Adobe Acrobat" "/Applications/Adobe Acrobat DC/Adobe Acrobat.app"
+
+    writeDialogCommand "icon: SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810"
+    writeDialogCommand "message: Removing Adobe Acrobat add-in payloads ..."
+    writeDialogCommand "progresstext: Removing Adobe Acrobat add-in payloads ..."
+}
 
 function stopCommonOfficeProcesses() {
     pkill -9 'Microsoft Word' 2>/dev/null
@@ -2297,17 +2350,29 @@ function op_remove_defender() {
 function op_remove_acrobat_addin() {
     info "Starting operation: remove_acrobat_addin"
 
+    prepareForAcrobatAddinRemoval
+
     local addinPaths=(
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Excel/AcrobatExcelAddin.xlam"
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Powerpoint/SaveAsAdobePDF.ppam"
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup/Word/linkCreation.dotm"
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/Excel/AcrobatExcelAddin.xlam"
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/PowerPoint/SaveAsAdobePDF.ppam"
-        "/Library/Application Support/Microsoft/Office365/User Content.localized/Startup.localized/Word/linkCreation.dotm"
-        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/Excel/AcrobatExcelAddin.xlam"
-        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/PowerPoint/SaveAsAdobePDF.ppam"
-        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized/Startup.localized/Word/linkCreation.dotm"
     )
+    local baseDirectories=(
+        "/Library/Application Support/Microsoft/Office365/User Content.localized"
+        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized"
+    )
+    local startupDirectoryNames=(Startup Startup.localized)
+    local powerPointDirectoryNames=(Powerpoint PowerPoint)
+    local baseDirectory
+    local startupDirectory
+    local powerPointDirectory
+
+    for baseDirectory in "${baseDirectories[@]}"; do
+        for startupDirectory in "${startupDirectoryNames[@]}"; do
+            addinPaths+=("${baseDirectory}/${startupDirectory}/Excel/AcrobatExcelAddin.xlam")
+            addinPaths+=("${baseDirectory}/${startupDirectory}/Word/linkCreation.dotm")
+            for powerPointDirectory in "${powerPointDirectoryNames[@]}"; do
+                addinPaths+=("${baseDirectory}/${startupDirectory}/${powerPointDirectory}/SaveAsAdobePDF.ppam")
+            done
+        done
+    done
 
     local targetPath
     for targetPath in "${addinPaths[@]}"; do

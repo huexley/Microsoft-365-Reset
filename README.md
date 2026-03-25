@@ -1,4 +1,4 @@
-# Microsoft 365 Reset (0.0.1a7)
+# Microsoft 365 Reset (0.0.1a8)
 
 ![Microsoft 365 Reset](images/Microsoft_365_Reset.png)
 
@@ -109,7 +109,7 @@ Use these IDs in `--operations` CSV:
 | `remove_office` | Full Microsoft 365 removal workflow |
 | `remove_skypeforbusiness` | Remove Skype for Business app/data/keychain entries |
 | `remove_defender` | Remove Microsoft Defender app/data/receipts |
-| `remove_acrobat_addin` | Remove Adobe Acrobat add-in files for Word, Excel, and PowerPoint |
+| `remove_acrobat_addin` | Remove Adobe Acrobat add-in files for Word, Excel, and PowerPoint startup folders |
 | `remove_zoomplugin` | Remove Zoom Outlook plugin and related metadata |
 | `remove_webexpt` | Remove WebEx Productivity Tools and related metadata |
 
@@ -121,6 +121,7 @@ The script enforces package-equivalent dependencies:
 - Selecting `reset_credentials` suppresses `reset_license`
 - Selecting `reset_teams_force` suppresses `reset_teams`
 - `remove_acrobat_addin` runs as a standalone operation with no dependency expansion or suppression
+- `remove_acrobat_addin` waits for Word, Excel, PowerPoint, and Acrobat to quit in interactive modes; `silent` mode force-stops those apps before cleanup
 - Selecting `remove_office` auto-adds `remove_skypeforbusiness`
 - Selecting `remove_office` suppresses reset-family selections
 

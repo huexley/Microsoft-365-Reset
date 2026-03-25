@@ -2,6 +2,10 @@
 
 ## Changelog
 
+### Version 0.0.1a8 (25-Mar-2026)
+- Expanded `remove_acrobat_addin` cleanup targets to cover both `Startup` and `Startup.localized` variants for Word, Excel, and PowerPoint, including both `Powerpoint` and `PowerPoint` folder names
+- Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal; `silent` mode now force-stops those apps before cleanup
+
 ### Version 0.0.1a7 (25-Mar-2026)
 - Added `remove_acrobat_addin` as a standalone ancillary removal option for Adobe Acrobat add-in payloads in Word, Excel, and PowerPoint
 - Updated README operation and execution-order documentation for the new Acrobat add-in removal workflow

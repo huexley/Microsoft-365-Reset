@@ -71,7 +71,7 @@ anticipationDuration="${5:-"1"}"
 # Organization Variables
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-# Script Human-readabale Name
+# Script Human-readable Name
 humanReadableScriptName="Adobe Acrobat Add-in Removal for Microsoft 365"
 
 # Organization’s Script Name

@@ -2,6 +2,25 @@
 
 ## Changelog
 
+### Version 0.0.1a8 (25-Mar-2026)
+- Expanded `remove_acrobat_addin` cleanup targets to cover both `Startup` and `Startup.localized` variants for Word, Excel, and PowerPoint, including both `Powerpoint` and `PowerPoint` folder names
+- Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal; `silent` mode now force-stops those apps before cleanup
+
+### Version 0.0.1a7 (25-Mar-2026)
+- Added `remove_acrobat_addin` as a standalone ancillary removal option for Adobe Acrobat add-in payloads in Word, Excel, and PowerPoint
+- Updated README operation and execution-order documentation for the new Acrobat add-in removal workflow
+
+### Version 0.0.1a6 (25-Mar-2026)
+- Updated `startProgressDialog()` to show the resolved operation titles that will actually run in interactive modes
+- Wait for the background progress dialog to close before continuing
+- Suppressed `swiftDialog` stderr for captured JSON dialogs
+
+### Version 0.0.1a5 (18-Mar-2026)
+- Enabled moveable and minimizable window for `startProgressDialog()`
+
+### Version 0.0.1a4 (18-Mar-2026)
+- Improved Jamf parameter handling to skip all leading positionals regardless of count
+
 ### Version 0.0.1a3 (14-Mar-2026)
 - Fixed argument parsing so Jamf-style leading positional parameters no longer trigger `Unknown argument` before CLI flags are processed (Addresses [Issue #3](https://github.com/dan-snelson/Microsoft-365-Reset/issues/3); thanks for the heads-up, @eirikt!)
 

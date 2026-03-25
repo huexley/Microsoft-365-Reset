@@ -14,6 +14,24 @@
 #
 # HISTORY
 #
+# Version 0.0.1a8, 25-Mar-2026, Dan K. Snelson
+#  - Expanded `remove_acrobat_addin` cleanup targets to cover Startup and Startup.localized variants
+#  - Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal
+#
+# Version 0.0.1a7, 25-Mar-2026, Dan K. Snelson
+#  - Added `remove_acrobat_addin` as a standalone Adobe Acrobat add-in removal operation
+#
+# Version 0.0.1a6, 25-Mar-2026, Dan K. Snelson
+#  - Added resolved operation summary to `startProgressDialog()`
+#  - Wait for the background progress dialog to close before continuing
+#  - Suppressed `swiftDialog` stderr for captured JSON dialogs
+#
+# Version 0.0.1a5, 18-Mar-2026, Dan K. Snelson
+#  - Enabled moveable and minimizable window for `startProgressDialog()`
+#
+# Version 0.0.1a4, 18-Mar-2026, Dan K. Snelson
+#   - Improved Jamf parameter handling to skip all leading positionals regardless of count
+#
 # Version 0.0.1a3, 14-Mar-2026, Dan K. Snelson
 #   - Fixed argument parsing so Jamf-style leading positional parameters no longer trigger `Unknown argument` before CLI flags are processed (Addresses [Issue #3](https://github.com/dan-snelson/Microsoft-365-Reset/issues/3); thanks for the heads-up, @eirikt!)
 #
@@ -40,7 +58,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a3"
+scriptVersion="0.0.1a8"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -59,12 +77,12 @@ dialogBinary="/usr/local/bin/dialog"
 # Runtime inputs (Jamf parameters by default; CLI flags can override below)
 operationMode="${4:-self-service}"
 operationCSV="${5:-}"
+
 # Client-side Log
 scriptLog="/var/log/org.churchofjesuschrist.log"
 restartMode="Restart Confirm"
 
-# CLI flags override Jamf parameters; tolerate only the leading Jamf-style positional window
-leadingPositionalCount=0
+# CLI flags override Jamf parameters; skip all leading positionals until we see a CLI flag
 seenCLIFlag="false"
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -91,8 +109,7 @@ while [[ $# -gt 0 ]]; do
             exit 10
             ;;
         *)
-            if [[ "${seenCLIFlag}" == "false" && ${leadingPositionalCount} -lt 5 ]]; then
-                ((leadingPositionalCount++))
+            if [[ "${seenCLIFlag}" == "false" ]]; then
                 shift
                 continue
             fi
@@ -129,6 +146,7 @@ selectedOperations=()
 resolvedOperations=()
 failedOperations=()
 completedOperations=()
+dialogPID=""
 
 # Logged-in user context (resolved during preflight)
 loggedInUser=""
@@ -156,6 +174,7 @@ operationIDs=(
     remove_office
     remove_skypeforbusiness
     remove_defender
+    remove_acrobat_addin
     remove_zoomplugin
     remove_webexpt
 )
@@ -178,6 +197,7 @@ operationTitle[reset_credentials]="Reset License and Sign-In"
 operationTitle[remove_office]="Completely remove Microsoft 365"
 operationTitle[remove_skypeforbusiness]="Remove Skype for Business"
 operationTitle[remove_defender]="Remove Defender"
+operationTitle[remove_acrobat_addin]="Remove Adobe Acrobat Add-in"
 operationTitle[remove_zoomplugin]="Remove Zoom Outlook Plugin"
 operationTitle[remove_webexpt]="Remove WebEx Productivity Tools"
 
@@ -199,6 +219,7 @@ operationDescription[reset_credentials]="Closes all apps and removes the Office 
 operationDescription[remove_office]="Removes all Microsoft 365 and Office apps, components, add-ins, templates and configuration data."
 operationDescription[remove_skypeforbusiness]="Closes Microsoft Skype for Business and then removes the application, configuration data, and keychain items."
 operationDescription[remove_defender]="Closes Microsoft Defender and then removes the application, configuration data, and keychain items."
+operationDescription[remove_acrobat_addin]="Removes the Adobe Acrobat add-in files for Word, Excel, and PowerPoint."
 operationDescription[remove_zoomplugin]="Removes the Zoom Plugin for Outlook and associated metadata."
 operationDescription[remove_webexpt]="Removes WebEx Productivity Tools associated metadata."
 
@@ -781,7 +802,7 @@ function showSelectionDialog() {
         checkboxArgs+=(--checkbox "${operationTitle[${op}]},name=${op}")
     done
 
-    baseMessage="Select one or more reset/removal operations.\n\nNote: Choosing 'Completely remove Microsoft 365' suppresses reset-family actions."
+    baseMessage="Select one or more reset / removal operations.\n\nNote: Choosing **Completely remove Microsoft 365** suppresses reset-related actions."
 
     while true; do
         messageText="${baseMessage}"
@@ -799,7 +820,7 @@ function showSelectionDialog() {
             --json \
             --button1text "Run" \
             --button2text "Cancel" \
-            "${checkboxArgs[@]}")"
+            "${checkboxArgs[@]}" 2>/dev/null)"
 
         rc=$?
         if [[ ${rc} -ne 0 ]]; then
@@ -897,13 +918,13 @@ function confirmDestructiveSelection() {
         --title "Confirm Destructive Actions" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message ":red[**Warning:**] You selected one or more destructive actions that can permanently remove local data.\n\nConfirm to proceed." \
+        --message "**:red[Warning:]** You selected one or more destructive actions that can permanently remove local data.\n\nConfirm to proceed." \
         --icon "SF=exclamationmark.triangle, weight=bold, colour1=red" \
         --checkbox "I understand these actions are destructive,name=confirm_destructive,enableButton1" \
         --json \
         --button1text "Confirm" \
         --button1disabled \
-        --button2text "Cancel" > "${workDirectory}/destructive.json"
+        --button2text "Cancel" > "${workDirectory}/destructive.json" 2>/dev/null
 
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
@@ -920,24 +941,56 @@ function confirmDestructiveSelection() {
 function startProgressDialog() {
     [[ "${operationMode}" == "silent" ]] && return 0
 
+    local progressMessage
+
     : > "${dialogCommandFile}"
     chmod 644 "${dialogCommandFile}" 2>/dev/null
     if [[ -n "${loggedInUser}" ]]; then
         /usr/sbin/chown "${loggedInUser}" "${dialogCommandFile}" 2>/dev/null
     fi
 
+    progressMessage="$(progressDialogMessage)"
+
     ${dialogBinary} \
         --title "${humanReadableScriptName}" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message "Running selected operations ..." \
+        --message "${progressMessage}" \
         --icon "SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810" \
+        --moveable \
+        --windowbuttons "min" \
         --commandfile "${dialogCommandFile}" \
         --button1disabled \
         --progress 100 \
         --progresstext "Starting ..." &
 
+    dialogPID=$!
     sleep 1
+}
+
+function progressDialogMessage() {
+    local message="The following operations will run:"
+    local op
+
+    if [[ ${#resolvedOperations[@]} -eq 0 ]]; then
+        echo "Running selected operations ..."
+        return 0
+    fi
+
+    for op in "${resolvedOperations[@]}"; do
+        message="${message}\n- ${operationTitle[${op}]}"
+    done
+
+    echo "${message}"
+}
+
+function waitForProgressDialog() {
+    [[ "${operationMode}" == "silent" ]] && return 0
+
+    if [[ -n "${dialogPID}" ]]; then
+        wait "${dialogPID}" 2>/dev/null || true
+        dialogPID=""
+    fi
 }
 
 function updateProgressDialog() {
@@ -971,6 +1024,7 @@ function finishProgressDialog() {
     writeDialogCommand "progresstext: Completed"
     sleep 1
     writeDialogCommand "quit:"
+    waitForProgressDialog
 }
 
 function showCompletionDialog() {
@@ -1043,6 +1097,55 @@ function promptForRestart() {
 # Operation Helpers
 #
 ####################################################################################################
+
+function waitForInteractiveAppQuit() {
+    local processName="$1"
+    local appName="$2"
+    local appIcon="$3"
+
+    [[ "${operationMode}" == "silent" ]] && return 0
+
+    if ! pgrep -x "${processName}" >/dev/null 2>&1; then
+        info "${appName} not running; proceeding"
+        return 0
+    fi
+
+    info "Waiting for ${appName} to quit before continuing"
+
+    [[ -n "${appIcon}" ]] && writeDialogCommand "icon: ${appIcon}"
+    writeDialogCommand "message: Please save open files and quit ${appName}."
+    writeDialogCommand "progresstext: Waiting for ${loggedInUser} to quit ${appName} ..."
+
+    while pgrep -x "${processName}" >/dev/null 2>&1; do
+        sleep 1
+    done
+
+    writeDialogCommand "message: ${appName} is no longer running."
+    writeDialogCommand "progresstext: Continuing ..."
+}
+
+function prepareForAcrobatAddinRemoval() {
+    if [[ "${operationMode}" == "silent" ]]; then
+        info "Silent mode: force-stopping Word, Excel, PowerPoint, and Acrobat before add-in removal"
+        pkill -9 'Microsoft Word' 2>/dev/null
+        pkill -9 'Microsoft Excel' 2>/dev/null
+        pkill -9 'Microsoft PowerPoint' 2>/dev/null
+        pkill -9 'AdobeAcrobat' 2>/dev/null
+        return 0
+    fi
+
+    writeDialogCommand "message: Please quit Word, Excel, PowerPoint, and Acrobat before removal."
+    writeDialogCommand "progresstext: Verifying required apps are closed ..."
+
+    waitForInteractiveAppQuit "Microsoft Word" "Microsoft Word" "/Applications/Microsoft Word.app"
+    waitForInteractiveAppQuit "Microsoft Excel" "Microsoft Excel" "/Applications/Microsoft Excel.app"
+    waitForInteractiveAppQuit "Microsoft PowerPoint" "Microsoft PowerPoint" "/Applications/Microsoft PowerPoint.app"
+    waitForInteractiveAppQuit "AdobeAcrobat" "Adobe Acrobat" "/Applications/Adobe Acrobat DC/Adobe Acrobat.app"
+
+    writeDialogCommand "icon: SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810"
+    writeDialogCommand "message: Removing Adobe Acrobat add-in payloads ..."
+    writeDialogCommand "progresstext: Removing Adobe Acrobat add-in payloads ..."
+}
 
 function stopCommonOfficeProcesses() {
     pkill -9 'Microsoft Word' 2>/dev/null
@@ -2244,6 +2347,41 @@ function op_remove_defender() {
     return 0
 }
 
+function op_remove_acrobat_addin() {
+    info "Starting operation: remove_acrobat_addin"
+
+    prepareForAcrobatAddinRemoval
+
+    local addinPaths=(
+    )
+    local baseDirectories=(
+        "/Library/Application Support/Microsoft/Office365/User Content.localized"
+        "${loggedInUserHome}/Library/Group Containers/UBF8T346G9.Office/User Content.localized"
+    )
+    local startupDirectoryNames=(Startup Startup.localized)
+    local powerPointDirectoryNames=(Powerpoint PowerPoint)
+    local baseDirectory
+    local startupDirectory
+    local powerPointDirectory
+
+    for baseDirectory in "${baseDirectories[@]}"; do
+        for startupDirectory in "${startupDirectoryNames[@]}"; do
+            addinPaths+=("${baseDirectory}/${startupDirectory}/Excel/AcrobatExcelAddin.xlam")
+            addinPaths+=("${baseDirectory}/${startupDirectory}/Word/linkCreation.dotm")
+            for powerPointDirectory in "${powerPointDirectoryNames[@]}"; do
+                addinPaths+=("${baseDirectory}/${startupDirectory}/${powerPointDirectory}/SaveAsAdobePDF.ppam")
+            done
+        done
+    done
+
+    local targetPath
+    for targetPath in "${addinPaths[@]}"; do
+        safeRemove "${targetPath}"
+    done
+
+    return 0
+}
+
 function op_remove_zoomplugin() {
     info "Starting operation: remove_zoomplugin"
 
@@ -2326,6 +2464,7 @@ function runOperation() {
         remove_office) op_remove_office ;;
         remove_skypeforbusiness) op_remove_skypeforbusiness ;;
         remove_defender) op_remove_defender ;;
+        remove_acrobat_addin) op_remove_acrobat_addin ;;
         remove_zoomplugin) op_remove_zoomplugin ;;
         remove_webexpt) op_remove_webexpt ;;
         *)
@@ -2350,7 +2489,7 @@ function sortOperationsByExecutionPhase() {
     done
 
     # ancillary removals
-    for op in remove_defender remove_zoomplugin remove_webexpt remove_skypeforbusiness; do
+    for op in remove_defender remove_acrobat_addin remove_zoomplugin remove_webexpt remove_skypeforbusiness; do
         isOperationSelected "${op}" && sorted+=("${op}")
     done
 
@@ -2442,6 +2581,7 @@ function main() {
             writeDialogCommand "button1: enable"
             sleep 1
             writeDialogCommand "quit:"
+            waitForProgressDialog
 
             showCompletionDialog
             exit 20

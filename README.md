@@ -1,4 +1,4 @@
-# Microsoft 365 Reset (0.0.1a4)
+# Microsoft 365 Reset (0.0.1a6)
 
 ![Microsoft 365 Reset](images/Microsoft_365_Reset.png)
 
@@ -81,7 +81,7 @@ CLI flags (`--mode`, `--operations`) override these values when both are present
 
 | Mode | Behavior |
 |---|---|
-| `self-service` | Full interactive flow (intro, selection, destructive confirmation, progress, completion) |
+| `self-service` | Full interactive flow (intro, selection, destructive confirmation, resolved-operation progress summary, completion) |
 | `test` | Interactive flow, useful for operator testing |
 | `debug` | Interactive flow + `set -x` |
 | `silent` | No dialogs; operations must be provided via `--operations`/`$5` |

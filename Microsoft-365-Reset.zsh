@@ -14,6 +14,11 @@
 #
 # HISTORY
 #
+# Version 0.0.1a6, 25-Mar-2026, Dan K. Snelson
+#  - Added resolved operation summary to `startProgressDialog()`
+#  - Wait for the background progress dialog to close before continuing
+#  - Suppressed `swiftDialog` stderr for captured JSON dialogs
+#
 # Version 0.0.1a5, 18-Mar-2026, Dan K. Snelson
 #  - Enabled moveable and minimizable window for `startProgressDialog()`
 #
@@ -46,7 +51,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a5"
+scriptVersion="0.0.1a6"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -134,6 +139,7 @@ selectedOperations=()
 resolvedOperations=()
 failedOperations=()
 completedOperations=()
+dialogPID=""
 
 # Logged-in user context (resolved during preflight)
 loggedInUser=""
@@ -786,7 +792,7 @@ function showSelectionDialog() {
         checkboxArgs+=(--checkbox "${operationTitle[${op}]},name=${op}")
     done
 
-    baseMessage="Select one or more reset/removal operations.\n\nNote: Choosing 'Completely remove Microsoft 365' suppresses reset-family actions."
+    baseMessage="Select one or more reset / removal operations.\n\nNote: Choosing **Completely remove Microsoft 365** suppresses reset-related actions."
 
     while true; do
         messageText="${baseMessage}"
@@ -804,7 +810,7 @@ function showSelectionDialog() {
             --json \
             --button1text "Run" \
             --button2text "Cancel" \
-            "${checkboxArgs[@]}")"
+            "${checkboxArgs[@]}" 2>/dev/null)"
 
         rc=$?
         if [[ ${rc} -ne 0 ]]; then
@@ -908,7 +914,7 @@ function confirmDestructiveSelection() {
         --json \
         --button1text "Confirm" \
         --button1disabled \
-        --button2text "Cancel" > "${workDirectory}/destructive.json"
+        --button2text "Cancel" > "${workDirectory}/destructive.json" 2>/dev/null
 
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
@@ -925,17 +931,21 @@ function confirmDestructiveSelection() {
 function startProgressDialog() {
     [[ "${operationMode}" == "silent" ]] && return 0
 
+    local progressMessage
+
     : > "${dialogCommandFile}"
     chmod 644 "${dialogCommandFile}" 2>/dev/null
     if [[ -n "${loggedInUser}" ]]; then
         /usr/sbin/chown "${loggedInUser}" "${dialogCommandFile}" 2>/dev/null
     fi
 
+    progressMessage="$(progressDialogMessage)"
+
     ${dialogBinary} \
         --title "${humanReadableScriptName}" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message "Running selected operations ..." \
+        --message "${progressMessage}" \
         --icon "SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810" \
         --moveable \
         --windowbuttons "min" \
@@ -944,7 +954,33 @@ function startProgressDialog() {
         --progress 100 \
         --progresstext "Starting ..." &
 
+    dialogPID=$!
     sleep 1
+}
+
+function progressDialogMessage() {
+    local message="The following operations will run:"
+    local op
+
+    if [[ ${#resolvedOperations[@]} -eq 0 ]]; then
+        echo "Running selected operations ..."
+        return 0
+    fi
+
+    for op in "${resolvedOperations[@]}"; do
+        message="${message}\n- ${operationTitle[${op}]}"
+    done
+
+    echo "${message}"
+}
+
+function waitForProgressDialog() {
+    [[ "${operationMode}" == "silent" ]] && return 0
+
+    if [[ -n "${dialogPID}" ]]; then
+        wait "${dialogPID}" 2>/dev/null || true
+        dialogPID=""
+    fi
 }
 
 function updateProgressDialog() {
@@ -978,6 +1014,7 @@ function finishProgressDialog() {
     writeDialogCommand "progresstext: Completed"
     sleep 1
     writeDialogCommand "quit:"
+    waitForProgressDialog
 }
 
 function showCompletionDialog() {
@@ -2449,6 +2486,7 @@ function main() {
             writeDialogCommand "button1: enable"
             sleep 1
             writeDialogCommand "quit:"
+            waitForProgressDialog
 
             showCompletionDialog
             exit 20

@@ -248,7 +248,7 @@ operationIcon[reset_credentials]="https://usw2.ics.services.jamfcloud.com/icon/h
 operationIcon[remove_office]="${applicationIcon}"
 operationIcon[remove_skypeforbusiness]="https://usw2.ics.services.jamfcloud.com/icon/hash_2438bd5113c77d65cba60342ea310dee0b20bf2f8d13e407cd51c49d9035beee"
 operationIcon[remove_defender]="https://usw2.ics.services.jamfcloud.com/icon/hash_7f153abc33e7bff3fa331c7e9d591a4eb74993f28f0f5f0a426b96a7d61f62f3"
-operationIcon[remove_acrobat_addin]="https://ics.services.jamfcloud.com/icon/hash_836bc15ee3a920f0402f19194aa9a5842180534181f53c4fff0ccd1243b5f897"
+operationIcon[remove_acrobat_addin]="https://usw2.ics.services.jamfcloud.com/icon/hash_836bc15ee3a920f0402f19194aa9a5842180534181f53c4fff0ccd1243b5f897"
 operationIcon[remove_zoomplugin]="https://usw2.ics.services.jamfcloud.com/icon/hash_be66420495a3f2f1981a49a0e0ad31783e9a789e835b4196af60554bf4c115ac"
 operationIcon[remove_webexpt]="https://usw2.ics.services.jamfcloud.com/icon/hash_fa1bd349edd751595ae0f20ab36b8e76199ba66454b7a74cd5d51bb8f0627893"
 

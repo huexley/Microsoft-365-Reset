@@ -67,7 +67,7 @@ sudo ./Microsoft-365-Reset.zsh [--mode MODE] [--operations CSV]
 | `--mode` | `self-service` | `self-service`, `silent`, `test`, `debug` |
 | `--operations` | empty | Comma-separated operation IDs (primarily for `silent`) |
 
-Checkbox style is hard-coded to `switch,small` in the interactive selection UI.
+Checkbox style is hard-coded to `switch,large` in the interactive selection UI, and each option includes its own operation icon.
 
 ### Jamf Parameter Mapping
 

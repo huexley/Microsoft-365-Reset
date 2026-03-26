@@ -2,6 +2,11 @@
 
 ## Changelog
 
+### Version 0.0.1a9 (26-Mar-2026)
+- Added per-operation icons to the interactive selection dialog
+- Promoted the generic Microsoft 365 icon to the shared `applicationIcon` variable for the intro dialog and fallback operation use
+- Updated README screenshots and selection UI notes for the new picker presentation
+
 ### Version 0.0.1a8 (25-Mar-2026)
 - Expanded `remove_acrobat_addin` cleanup targets to cover both `Startup` and `Startup.localized` variants for Word, Excel, and PowerPoint, including both `Powerpoint` and `PowerPoint` folder names
 - Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal; `silent` mode now force-stops those apps before cleanup

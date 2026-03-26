@@ -109,7 +109,7 @@ Use these IDs in `--operations` CSV:
 | `remove_office` | Full Microsoft 365 removal workflow |
 | `remove_skypeforbusiness` | Remove Skype for Business app/data/keychain entries |
 | `remove_defender` | Remove Microsoft Defender app/data/receipts |
-| `remove_acrobat_addin` | Remove Adobe Acrobat add-in files for Word, Excel, and PowerPoint startup folders |
+| `remove_acrobat_addin` | Remove Adobe Acrobat add-in payloads from Word, Excel, and PowerPoint startup folders in both system and user Office content paths |
 | `remove_zoomplugin` | Remove Zoom Outlook plugin and related metadata |
 | `remove_webexpt` | Remove WebEx Productivity Tools and related metadata |
 
@@ -124,6 +124,21 @@ The script enforces package-equivalent dependencies:
 - `remove_acrobat_addin` waits for Word, Excel, PowerPoint, and Acrobat to quit in interactive modes; `silent` mode force-stops those apps before cleanup
 - Selecting `remove_office` auto-adds `remove_skypeforbusiness`
 - Selecting `remove_office` suppresses reset-family selections
+
+### Acrobat Add-in Removal
+
+`remove_acrobat_addin` removes the Adobe Acrobat startup payloads used by the Office apps:
+
+- `AcrobatExcelAddin.xlam`
+- `linkCreation.dotm`
+- `SaveAsAdobePDF.ppam`
+
+The script checks both supported Office content roots:
+
+- `/Library/Application Support/Microsoft/Office365/User Content.localized`
+- `~/Library/Group Containers/UBF8T346G9.Office/User Content.localized`
+
+Within each root, cleanup covers both `Startup` and `Startup.localized`, and both `Powerpoint` and `PowerPoint` folder name variants where applicable.
 
 ## Destructive Safeguards
 

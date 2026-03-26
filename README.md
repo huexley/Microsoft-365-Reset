@@ -1,4 +1,4 @@
-# Microsoft 365 Reset (0.0.1a8)
+# Microsoft 365 Reset (0.0.1a9)
 
 ![Microsoft 365 Reset](images/Microsoft_365_Reset.png)
 
@@ -32,12 +32,15 @@ The script consolidates expanded package workflows into one root-run tool with:
 
 ## Screenshots
 
-![M365R-00001](images/M365R-00001.png)
-![M365R-00002](images/M365R-00002.png)
-![M365R-00003](images/M365R-00003.png)
-![M365R-00004](images/M365R-00004.png)
-![M365R-00005](images/M365R-00005.png)
-![M365R-00006](images/M365R-00006.png)
+![M365R-1](images/M365R-1.png)
+![M365R-2](images/M365R-2.png)
+![M365R-3](images/M365R-3.png)
+![M365R-4](images/M365R-4.png)
+![M365R-5](images/M365R-5.png)
+![M365R-6](images/M365R-6.png)
+![M365R-7](images/M365R-7.png)
+![M365R-8](images/M365R-8.png)
+![M365R-9](images/M365R-9.png)
 
 ## Requirements
 
@@ -64,7 +67,7 @@ sudo ./Microsoft-365-Reset.zsh [--mode MODE] [--operations CSV]
 | `--mode` | `self-service` | `self-service`, `silent`, `test`, `debug` |
 | `--operations` | empty | Comma-separated operation IDs (primarily for `silent`) |
 
-Checkbox style is hard-coded to `switch,small` in the interactive selection UI.
+Checkbox style is hard-coded to `switch,large` in the interactive selection UI, and each option includes its own operation icon.
 
 ### Jamf Parameter Mapping
 

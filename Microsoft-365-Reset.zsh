@@ -14,6 +14,10 @@
 #
 # HISTORY
 #
+# Version 0.0.1a9, 26-Mar-2026, Dan K. Snelson
+#  - Added per-operation icons to selection dialog checkboxes
+#  - Promoted generic Microsoft 365 icon to `applicationIcon` variable
+#
 # Version 0.0.1a8, 25-Mar-2026, Dan K. Snelson
 #  - Expanded `remove_acrobat_addin` cleanup targets to cover Startup and Startup.localized variants
 #  - Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal
@@ -58,7 +62,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a8"
+scriptVersion="0.0.1a9"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -67,6 +71,9 @@ fontSize="14"
 
 # Organization-specific overlay icon URL
 organizationOverlayiconURL="https://swiftdialog.app/_astro/dialog_logo.CZF0LABZ_ZjWz8w.webp"
+
+# Generic Microsoft 365 icon (used as fallback for operations without a specific app icon)
+applicationIcon="https://usw2.ics.services.jamfcloud.com/icon/hash_8bf6549c22de3db831aafaf9c5c02d3aa9a928f4abe377eb2f8cbeab3959615c"
 
 autoload -Uz is-at-least
 
@@ -222,6 +229,28 @@ operationDescription[remove_defender]="Closes Microsoft Defender and then remove
 operationDescription[remove_acrobat_addin]="Removes the Adobe Acrobat add-in files for Word, Excel, and PowerPoint."
 operationDescription[remove_zoomplugin]="Removes the Zoom Plugin for Outlook and associated metadata."
 operationDescription[remove_webexpt]="Removes WebEx Productivity Tools associated metadata."
+
+typeset -A operationIcon
+operationIcon[reset_factory]="${applicationIcon}"
+operationIcon[reset_word]="https://usw2.ics.services.jamfcloud.com/icon/hash_51ae4c1e37bfbde2097e14712c3c13885157d632105804bcfaa912a627649b4c"
+operationIcon[reset_excel]="https://usw2.ics.services.jamfcloud.com/icon/hash_9df1c82089b6a3ef006dc6a94995782e1809d6f9767c189a1608067a9f651ca9"
+operationIcon[reset_powerpoint]="https://usw2.ics.services.jamfcloud.com/icon/hash_caadba785f099cec2bb510388390f5239c735a30723ba81b8a0e51792c4adff3"
+operationIcon[reset_outlook]="https://usw2.ics.services.jamfcloud.com/icon/hash_e5b0c5b42d26e39431ecc7445ff0122e7d1a73d3487f55ca91b99523136b825d"
+operationIcon[remove_outlook_data]="https://usw2.ics.services.jamfcloud.com/icon/hash_e5b0c5b42d26e39431ecc7445ff0122e7d1a73d3487f55ca91b99523136b825d"
+operationIcon[reset_onenote]="https://usw2.ics.services.jamfcloud.com/icon/hash_e17f32e5366c1d5a3f29f67f8b38470144ecaf597435d2d46523fc1757382ec7"
+operationIcon[remove_onenote_data]="https://usw2.ics.services.jamfcloud.com/icon/hash_e17f32e5366c1d5a3f29f67f8b38470144ecaf597435d2d46523fc1757382ec7"
+operationIcon[reset_onedrive]="https://usw2.ics.services.jamfcloud.com/icon/hash_72e08cf3b2dc4d168dc62faf4fc6821b0e0ec79f3382b1567a02b35176024adc"
+operationIcon[reset_teams]="https://usw2.ics.services.jamfcloud.com/icon/hash_60344669638073113f3ca25e0a60e7080b5141536dbb62d8920d6e21fa70f877"
+operationIcon[reset_teams_force]="https://usw2.ics.services.jamfcloud.com/icon/hash_60344669638073113f3ca25e0a60e7080b5141536dbb62d8920d6e21fa70f877"
+operationIcon[reset_autoupdate]="https://usw2.ics.services.jamfcloud.com/icon/hash_0a0f163704e545ebbca43b4a34d0711777d05fb8d436f42b09f9f9b5e255d494"
+operationIcon[reset_license]="https://usw2.ics.services.jamfcloud.com/icon/hash_84dbce6614758cfb83ed598db296b7e1e9fedc69b81aed9818d95c377b465eaa"
+operationIcon[reset_credentials]="https://usw2.ics.services.jamfcloud.com/icon/hash_518887d8e7866378b4f396939d0a22fc79ab717b60438b0002324303da64c654"
+operationIcon[remove_office]="${applicationIcon}"
+operationIcon[remove_skypeforbusiness]="https://usw2.ics.services.jamfcloud.com/icon/hash_2438bd5113c77d65cba60342ea310dee0b20bf2f8d13e407cd51c49d9035beee"
+operationIcon[remove_defender]="https://usw2.ics.services.jamfcloud.com/icon/hash_7f153abc33e7bff3fa331c7e9d591a4eb74993f28f0f5f0a426b96a7d61f62f3"
+operationIcon[remove_acrobat_addin]="https://usw2.ics.services.jamfcloud.com/icon/hash_836bc15ee3a920f0402f19194aa9a5842180534181f53c4fff0ccd1243b5f897"
+operationIcon[remove_zoomplugin]="https://usw2.ics.services.jamfcloud.com/icon/hash_be66420495a3f2f1981a49a0e0ad31783e9a789e835b4196af60554bf4c115ac"
+operationIcon[remove_webexpt]="https://usw2.ics.services.jamfcloud.com/icon/hash_fa1bd349edd751595ae0f20ab36b8e76199ba66454b7a74cd5d51bb8f0627893"
 
 autoRepairOps=(reset_word reset_excel reset_powerpoint reset_outlook reset_onenote reset_onedrive reset_teams reset_autoupdate)
 
@@ -734,7 +763,7 @@ function showIntroDialog() {
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
         --message "This tool _may_ help address Microsoft 365-related issues on this Mac:\n- Repair\n- Reset\n- Remove\n\nClick **Continue** to select actions; click **Cancel** to exit." \
-        --icon "https://usw2.ics.services.jamfcloud.com/icon/hash_8bf6549c22de3db831aafaf9c5c02d3aa9a928f4abe377eb2f8cbeab3959615c" \
+        --icon "${applicationIcon}" \
         --overlayicon "${organizationOverlayiconURL}" \
         --button1text "Continue" \
         --button2text "Cancel" \
@@ -799,7 +828,7 @@ function showSelectionDialog() {
     local rc
 
     for op in "${operationIDs[@]}"; do
-        checkboxArgs+=(--checkbox "${operationTitle[${op}]},name=${op}")
+        checkboxArgs+=(--checkbox "${operationTitle[${op}]},name=${op},icon=${operationIcon[${op}]}")
     done
 
     baseMessage="Select one or more reset / removal operations.\n\nNote: Choosing **Completely remove Microsoft 365** suppresses reset-related actions."
@@ -816,7 +845,7 @@ function showSelectionDialog() {
             --messagefont "size=${fontSize}" \
             --message "${messageText}" \
             --icon "https://usw2.ics.services.jamfcloud.com/icon/hash_a0bc0557b531bc5d2713dece4f513df1ac5038ff55ebf5115edf43b951f916c7" \
-            --checkboxstyle "switch,small" \
+            --checkboxstyle "switch,large" \
             --json \
             --button1text "Run" \
             --button2text "Cancel" \

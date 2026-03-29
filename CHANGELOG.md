@@ -2,6 +2,10 @@
 
 ## Changelog
 
+### Version 1.0.0b1 (29-Mar-2026)
+- Initial public beta release
+- Updated `promptForRestart()` to align the restart recommendation dialog with the current SYM-Lite presentation and button layout
+
 ### Version 0.0.1a9 (26-Mar-2026)
 - Added per-operation icons to the interactive selection dialog
 - Promoted the generic Microsoft 365 icon to the shared `applicationIcon` variable for the intro dialog and fallback operation use

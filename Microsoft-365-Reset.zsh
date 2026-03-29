@@ -14,39 +14,8 @@
 #
 # HISTORY
 #
-# Version 0.0.1a9, 26-Mar-2026, Dan K. Snelson
-#  - Added per-operation icons to selection dialog checkboxes
-#  - Promoted generic Microsoft 365 icon to `applicationIcon` variable
-#
-# Version 0.0.1a8, 25-Mar-2026, Dan K. Snelson
-#  - Expanded `remove_acrobat_addin` cleanup targets to cover Startup and Startup.localized variants
-#  - Wait for Word, Excel, PowerPoint, and Acrobat to quit before interactive Acrobat add-in removal
-#
-# Version 0.0.1a7, 25-Mar-2026, Dan K. Snelson
-#  - Added `remove_acrobat_addin` as a standalone Adobe Acrobat add-in removal operation
-#
-# Version 0.0.1a6, 25-Mar-2026, Dan K. Snelson
-#  - Added resolved operation summary to `startProgressDialog()`
-#  - Wait for the background progress dialog to close before continuing
-#  - Suppressed `swiftDialog` stderr for captured JSON dialogs
-#
-# Version 0.0.1a5, 18-Mar-2026, Dan K. Snelson
-#  - Enabled moveable and minimizable window for `startProgressDialog()`
-#
-# Version 0.0.1a4, 18-Mar-2026, Dan K. Snelson
-#   - Improved Jamf parameter handling to skip all leading positionals regardless of count
-#
-# Version 0.0.1a3, 14-Mar-2026, Dan K. Snelson
-#   - Fixed argument parsing so Jamf-style leading positional parameters no longer trigger `Unknown argument` before CLI flags are processed (Addresses [Issue #3](https://github.com/dan-snelson/Microsoft-365-Reset/issues/3); thanks for the heads-up, @eirikt!)
-#
-# Version 0.0.1a2, 13-Mar-2026, Dan K. Snelson
-#   - Aligned cleanup targets with MOFA community-maintained reset scripts
-#   - Added MOFA-style factory reset cleanup and Teams reset behavior
-#   - Skip app configuration cleanup after repair/reinstall to match MOFA app reset scripts
-#   - Added license-only reset and Teams force-reinstall operations
-#
-# Version 0.0.1a1, 12-Mar-2026, Dan K. Snelson
-#   - Initial unified script implementation
+# Version 1.0.0b1, 29-Mar-2026, Dan K. Snelson (@dan-snelson)
+#  - Initial public beta release
 #
 ####################################################################################################
 
@@ -62,7 +31,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="0.0.1a9"
+scriptVersion="1.0.0b1"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -88,6 +57,7 @@ operationCSV="${5:-}"
 # Client-side Log
 scriptLog="/var/log/org.churchofjesuschrist.log"
 restartMode="Restart Confirm"
+restartPromptEnabled="true"
 
 # CLI flags override Jamf parameters; skip all leading positionals until we see a CLI flag
 seenCLIFlag="false"
@@ -1100,23 +1070,32 @@ function executeRestartAction() {
 }
 
 function promptForRestart() {
-    [[ "${operationMode}" == "silent" ]] && return 0
+    if [[ "${restartPromptEnabled}" != "true" ]] || [[ "${operationMode}" == "silent" ]]; then
+        return 0
+    fi
+
+    local rc
+    local restartFontSize=$(( fontSize > 2 ? fontSize - 2 : fontSize ))
 
     ${dialogBinary} \
         --title "Restart Recommended" \
         --infotext "${scriptVersion}" \
-        --messagefont "size=${fontSize}" \
-        --message "To ensure all changes are fully applied, restart this Mac now." \
-        --icon "SF=restart.circle.fill, colour=#1C1A1A" \
+        --messagefont "size=${restartFontSize}" \
+        --message "**A restart is recommended after performing any reset or removal.**\n\nWould you like to restart now?" \
+        --icon "SF=restart.circle.fill,colour=#969899" \
+        --buttonstyle "stack" \
         --button1text "Restart Now" \
-        --button2text "Later"
+        --button2text "Later" \
+        --height 400 \
+        --width 400 2>/dev/null
 
-    local restartPromptRC=$?
-    if [[ ${restartPromptRC} -eq 0 ]]; then
-        info "User opted to restart now"
+    rc=$?
+
+    if [[ ${rc} -eq 0 ]]; then
+        notice "User chose to restart now"
         executeRestartAction "Restart Confirm"
     else
-        info "User deferred restart"
+        notice "User chose to restart later"
     fi
 }
 

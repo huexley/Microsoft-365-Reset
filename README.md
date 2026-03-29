@@ -1,6 +1,8 @@
-# Microsoft 365 Reset (0.0.1a9)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/dan-snelson/Microsoft-365-Reset?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/dan-snelson/Microsoft-365-Reset) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/dan-snelson/Microsoft-365-Reset)
 
-![Microsoft 365 Reset](images/Microsoft_365_Reset.png)
+# Microsoft 365 Reset (1.0.0b1)
+
+<image src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b1" width="128" height="128" />
 
 Unified `zsh` script to repair, reset, or remove Microsoft 365 components on macOS:
 
@@ -32,15 +34,23 @@ The script consolidates expanded package workflows into one root-run tool with:
 
 ## Screenshots
 
-![M365R-1](images/M365R-1.png)
-![M365R-2](images/M365R-2.png)
-![M365R-3](images/M365R-3.png)
-![M365R-4](images/M365R-4.png)
-![M365R-5](images/M365R-5.png)
-![M365R-6](images/M365R-6.png)
-![M365R-7](images/M365R-7.png)
-![M365R-8](images/M365R-8.png)
-![M365R-9](images/M365R-9.png)
+<table>
+  <tr>
+    <td><img src="images/M365R-00001.png" alt="M365R-00001"></td>
+    <td><img src="images/M365R-00002.png" alt="M365R-00002"></td>
+    <td><img src="images/M365R-00003.png" alt="M365R-00003"></td>
+  </tr>
+  <tr>
+    <td><img src="images/M365R-00004.png" alt="M365R-00004"></td>
+    <td><img src="images/M365R-00005.png" alt="M365R-00005"></td>
+    <td><img src="images/M365R-00006.png" alt="M365R-00006"></td>
+  </tr>
+  <tr>
+    <td><img src="images/M365R-00007.png" alt="M365R-00007"></td>
+    <td><img src="images/M365R-00008.png" alt="M365R-00008"></td>
+    <td><img src="images/M365R-00009.png" alt="M365R-00009"></td>
+  </tr>
+</table>
 
 ## Requirements
 

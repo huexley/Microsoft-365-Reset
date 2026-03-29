@@ -1091,12 +1091,18 @@ function promptForRestart() {
 
     rc=$?
 
-    if [[ ${rc} -eq 0 ]]; then
-        notice "User chose to restart now"
-        executeRestartAction "Restart Confirm"
-    else
-        notice "User chose to restart later"
-    fi
+    case "${rc}" in
+        0)
+            notice "User chose to restart now"
+            executeRestartAction "Restart Confirm"
+            ;;
+        2)
+            notice "User chose to restart later"
+            ;;
+        *)
+            warning "Restart prompt exited with unexpected return code: ${rc}; no restart action taken"
+            ;;
+    esac
 }
 
 

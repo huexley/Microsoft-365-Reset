@@ -2,7 +2,7 @@
 
 # Microsoft 365 Reset (1.0.0b1)
 
-<image src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b1" width="128" height="128" />
+<img src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b1" width="128" height="128" />
 
 Unified `zsh` script to repair, reset, or remove Microsoft 365 components on macOS:
 

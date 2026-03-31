@@ -238,6 +238,34 @@ Jamf-style invocation with CLI override example:
 sudo ./Microsoft-365-Reset.zsh "" "" "" "self-service" "" --mode silent --operations reset_autoupdate,reset_credentials
 ```
 
+## Maintainer MOFA Workflow
+
+For repo maintenance, `scripts/mofa-consult.zsh` can sync a sibling `../MOFA` checkout from upstream MOFA and generate a focused inclusion report for this repo. This helper is not used by `Microsoft-365-Reset.zsh` at runtime.
+
+Default sync + report:
+
+```bash
+./scripts/mofa-consult.zsh
+```
+
+Generate a report from the current local MOFA checkout without syncing:
+
+```bash
+./scripts/mofa-consult.zsh --report-only --mofa-repo ../MOFA --output /var/tmp/M365R-MOFA-report.md
+```
+
+Sync local `main` from `upstream/main` without pushing your fork:
+
+```bash
+./scripts/mofa-consult.zsh --sync-only --no-push-origin
+```
+
+The report classifies findings as `Candidate inclusion`, `Intentional divergence`, or `Local-only operation`, and compares:
+
+- MOFA community-maintained reset scripts against local operation coverage
+- MOFA stable feed metadata from `latest_raw_files/macos_standalone_latest.json`
+- Hard-coded local repair links, MAU application IDs, and current minimum-version thresholds for Teams and MAU
+
 ## Exit Codes
 
 | Code | Meaning |

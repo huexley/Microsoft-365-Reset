@@ -2,6 +2,10 @@
 
 ## Changelog
 
+### Unreleased
+- Added `scripts/mofa-consult.zsh` to sync a sibling `../MOFA` checkout from upstream MOFA and generate a local inclusion report for this repo
+- Documented the maintainer MOFA sync/report workflow in `README.md`
+
 ### Version 1.0.0b1 (29-Mar-2026)
 - Initial public beta release
 - Updated `promptForRestart()` to align the restart recommendation dialog with the current SYM-Lite presentation and button layout

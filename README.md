@@ -242,6 +242,8 @@ sudo ./Microsoft-365-Reset.zsh "" "" "" "self-service" "" --mode silent --operat
 
 For repo maintenance, `scripts/mofa-consult.zsh` can sync a sibling `../MOFA` checkout from upstream MOFA and generate a focused inclusion report for this repo. This helper is not used by `Microsoft-365-Reset.zsh` at runtime.
 
+By default, the sync step fast-forwards the sibling MOFA checkout's local `main` branch to `upstream/main` and pushes `origin/main` to keep your fork current. Use `--no-push-origin` to skip the fork push.
+
 Default sync + report:
 
 ```bash
@@ -260,11 +262,12 @@ Sync local `main` from `upstream/main` without pushing your fork:
 ./scripts/mofa-consult.zsh --sync-only --no-push-origin
 ```
 
-The report classifies findings as `Candidate inclusion`, `Intentional divergence`, or `Local-only operation`, and compares:
+The report uses `Covered`, `Candidate inclusion`, `Intentional divergence`, `Local-only operation`, and `Skipped` classifications, and compares:
 
 - MOFA community-maintained reset scripts against local operation coverage
 - MOFA stable feed metadata from `latest_raw_files/macos_standalone_latest.json`
 - Hard-coded local repair links, MAU application IDs, and current minimum-version thresholds for Teams and MAU
+- Resolved `file://` links back to the sibling MOFA scripts referenced by the report
 
 ## Exit Codes
 

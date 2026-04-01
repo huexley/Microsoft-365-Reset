@@ -38,11 +38,11 @@ function usage() {
 Usage: ./scripts/mofa-consult.zsh [options]
 
 Options:
-  --sync-only            Sync ../MOFA and skip report generation
+  --sync-only            Sync ../MOFA and skip report generation (pushes origin/main by default)
   --report-only          Generate the report from the local MOFA checkout without syncing
   --mofa-repo PATH       Override the default sibling MOFA checkout path (${defaultMofaRepo})
   --output PATH          Override the default report path (${defaultOutputPath})
-  --no-push-origin       Sync local main from upstream/main without pushing origin/main
+  --no-push-origin       Skip the default origin/main push during sync
   --help                 Show this help text
 EOF
 }
@@ -79,6 +79,17 @@ function escapeForMarkdown() {
     local value="${1}"
     value="${value//|/\\|}"
     print -r -- "${value}"
+}
+
+function pathToFileURL() {
+    local value="${1}"
+    value="${value//\%/%25}"
+    value="${value// /%20}"
+    value="${value//\#/%23}"
+    value="${value//\?/%3F}"
+    value="${value//\[/%5B}"
+    value="${value//\]/%5D}"
+    print -r -- "file://${value}"
 }
 
 function appendReportLine() {
@@ -217,6 +228,8 @@ function buildScriptCoverageSection() {
     local classification
     local note
     local mofaScriptRelativePath
+    local mofaScriptPath
+    local mofaScriptURL
     local localOpLabel
 
     typeset -A mofaScriptPathForOperation
@@ -289,11 +302,13 @@ function buildScriptCoverageSection() {
 
     for operationID in "${mappedOperations[@]}"; do
         mofaScriptRelativePath="${mofaScriptPathForOperation[${operationID}]}"
+        mofaScriptPath="${mofaRepoPath}/${mofaScriptRelativePath}"
+        mofaScriptURL="$(pathToFileURL "${mofaScriptPath}")"
         localOpLabel="${operationID}"
         classification="Covered"
         note=""
 
-        if [[ ! -f "${mofaRepoPath}/${mofaScriptRelativePath}" ]]; then
+        if [[ ! -f "${mofaScriptPath}" ]]; then
             classification="Candidate inclusion"
             note="Mapped MOFA community script is missing from the sibling checkout."
             addCandidateItem "${operationID}: expected MOFA script missing at ${mofaScriptRelativePath}"
@@ -309,7 +324,7 @@ function buildScriptCoverageSection() {
             note="Mapped MOFA community script is represented by a local operation."
         fi
 
-        appendReportLine "| [$(basename "${mofaScriptRelativePath}")](${mofaScriptRelativePath}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
+        appendReportLine "| [$(basename "${mofaScriptRelativePath}")](${mofaScriptURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
     done
 
     appendReportLine ""
@@ -421,6 +436,7 @@ function buildFeedComparisonSection() {
         fallbackNote=""
 
         if [[ -z "${feedFullVersion}" ]]; then
+            classification="Skipped"
             note="MOFA stable feed does not publish ${displayName} in macos_standalone_latest.json; local comparison was skipped."
             appendReportLine "| ${displayName} | ${classification} | $(escapeForMarkdown "${note}") |"
             continue

@@ -2,6 +2,14 @@
 
 ## Changelog
 
+### Unreleased
+
+### Version 1.0.0b2 (31-Mar-2026)
+- Added `scripts/mofa-consult.zsh` to sync a sibling `../MOFA` checkout from upstream MOFA and generate a local inclusion report for this repo
+- Documented the maintainer MOFA sync/report workflow in `README.md`
+- Updated the Outlook primary repair URL to match the current MOFA stable feed
+- Updated MOFA consultation reports to use resolved `file://` links for sibling MOFA scripts and mark unpublished stable-feed items as `Skipped`
+
 ### Version 1.0.0b1 (29-Mar-2026)
 - Initial public beta release
 - Updated `promptForRestart()` to align the restart recommendation dialog with the current SYM-Lite presentation and button layout

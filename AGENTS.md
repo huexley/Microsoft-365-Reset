@@ -41,6 +41,7 @@ Microsoft 365 Reset should provide a safe, clear, swiftDialog-driven workflow to
 ## Key Files
 
 - `Microsoft-365-Reset.zsh`: main script
+- `scripts/mofa-consult.zsh`: maintainer helper for MOFA sync and inclusion reporting
 - `README.md`: usage and behavior documentation
 - `CHANGELOG.md`: release/change history
 - `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/`: original package scripts and Distribution reference
@@ -72,11 +73,12 @@ Maintain the established style of `Microsoft-365-Reset.zsh` unless the user expl
 
 ## Required Validation
 
-1. Run `zsh -n Microsoft-365-Reset.zsh` after modifying Zsh files (required).
-2. Verify behavior-sensitive changes against operation flow (`self-service` and `silent` assumptions).
-3. Update `README.md` when behavior, parameters, or examples change.
-4. Update `CHANGELOG.md` for meaningful user-visible behavior changes.
-5. Do not add new production dependencies without explicit user confirmation.
+1. Run `zsh -n` against every modified Zsh file (required).
+2. At minimum, run `zsh -n Microsoft-365-Reset.zsh` after modifying the main script and `zsh -n scripts/mofa-consult.zsh` after modifying the MOFA helper.
+3. Verify behavior-sensitive changes against operation flow (`self-service` and `silent` assumptions).
+4. Update `README.md` when behavior, parameters, or examples change.
+5. Update `CHANGELOG.md` for meaningful user-visible behavior changes.
+6. Do not add new production dependencies without explicit user confirmation.
 
 ## Change Discipline
 

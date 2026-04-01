@@ -14,8 +14,8 @@
 #
 # HISTORY
 #
-# Version 1.0.0b1, 29-Mar-2026, Dan K. Snelson (@dan-snelson)
-#  - Initial public beta release
+# Version 1.0.0b2, 31-Mar-2026, Dan K. Snelson (@dan-snelson)
+#  - Align Outlook primary repair URL with current MOFA stable feed
 #
 ####################################################################################################
 
@@ -31,7 +31,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="1.0.0b1"
+scriptVersion="1.0.0b2"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -1651,7 +1651,7 @@ function op_reset_outlook() {
     maybeRepairOfficeApp \
         "Microsoft Outlook" \
         "/Applications/Microsoft Outlook.app" \
-        "https://go.microsoft.com/fwlink/?linkid=525137" \
+        "https://go.microsoft.com/fwlink/?linkid=2228621" \
         "https://go.microsoft.com/fwlink/?linkid=871753" \
         "OPIM2019" \
         "${osVersion}"

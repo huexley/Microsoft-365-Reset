@@ -1,8 +1,8 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/dan-snelson/Microsoft-365-Reset?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/dan-snelson/Microsoft-365-Reset) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/dan-snelson/Microsoft-365-Reset)
 
-# Microsoft 365 Reset (1.0.0b1)
+# Microsoft 365 Reset (1.0.0b2)
 
-<img src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b1" width="128" height="128" />
+<img src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b2" width="128" height="128" />
 
 Unified `zsh` script to repair, reset, or remove Microsoft 365 components on macOS:
 
@@ -237,6 +237,37 @@ Jamf-style invocation with CLI override example:
 ```bash
 sudo ./Microsoft-365-Reset.zsh "" "" "" "self-service" "" --mode silent --operations reset_autoupdate,reset_credentials
 ```
+
+## Maintainer MOFA Workflow
+
+For repo maintenance, `scripts/mofa-consult.zsh` can sync a sibling `../MOFA` checkout from upstream MOFA and generate a focused inclusion report for this repo. This helper is not used by `Microsoft-365-Reset.zsh` at runtime.
+
+By default, the sync step fast-forwards the sibling MOFA checkout's local `main` branch to `upstream/main` and pushes `origin/main` to keep your fork current. Use `--no-push-origin` to skip the fork push.
+
+Default sync + report:
+
+```bash
+./scripts/mofa-consult.zsh
+```
+
+Generate a report from the current local MOFA checkout without syncing:
+
+```bash
+./scripts/mofa-consult.zsh --report-only --mofa-repo ../MOFA --output /var/tmp/M365R-MOFA-report.md
+```
+
+Sync local `main` from `upstream/main` without pushing your fork:
+
+```bash
+./scripts/mofa-consult.zsh --sync-only --no-push-origin
+```
+
+The report uses `Covered`, `Candidate inclusion`, `Intentional divergence`, `Local-only operation`, and `Skipped` classifications, and compares:
+
+- MOFA community-maintained reset scripts against local operation coverage
+- MOFA stable feed metadata from `latest_raw_files/macos_standalone_latest.json`
+- Hard-coded local repair links, MAU application IDs, and current minimum-version thresholds for Teams and MAU
+- Resolved `file://` links back to the sibling MOFA scripts referenced by the report
 
 ## Exit Codes
 

@@ -372,7 +372,7 @@ function buildFeedComparisonSection() {
     localPrimaryURL[Word]="https://go.microsoft.com/fwlink/?linkid=525134"
     localPrimaryURL[Excel]="https://go.microsoft.com/fwlink/?linkid=525135"
     localPrimaryURL[PowerPoint]="https://go.microsoft.com/fwlink/?linkid=525136"
-    localPrimaryURL[Outlook]="https://go.microsoft.com/fwlink/?linkid=525137"
+    localPrimaryURL[Outlook]="https://go.microsoft.com/fwlink/?linkid=2228621"
     localPrimaryURL[OneNote]="https://go.microsoft.com/fwlink/?linkid=820886"
     localPrimaryURL[OneDrive]="https://go.microsoft.com/fwlink/?linkid=861011"
     localPrimaryURL[Teams]="https://go.microsoft.com/fwlink/?linkid=2249065"

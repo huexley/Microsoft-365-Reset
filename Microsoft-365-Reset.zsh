@@ -14,8 +14,9 @@
 #
 # HISTORY
 #
-# Version 1.0.0b2, 31-Mar-2026, Dan K. Snelson (@dan-snelson)
-#  - Align Outlook primary repair URL with current MOFA stable feed
+# Version 1.0.0b3, 06-Apr-2026, Dan K. Snelson (@dan-snelson)
+#  - Fresh run of `scripts/mofa-consult.zsh` to sync with the latest MOFA stable feed and generate an updated local inclusion report for this repo
+#  - Modified interactive user cancellations to exit cleanly so Jamf Pro policy logs do not report them as failures.
 #
 ####################################################################################################
 
@@ -31,7 +32,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="1.0.0b2"
+scriptVersion="1.0.0b3"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -124,6 +125,7 @@ resolvedOperations=()
 failedOperations=()
 completedOperations=()
 dialogPID=""
+interactiveCancelReturnCode="30"
 
 # Logged-in user context (resolved during preflight)
 loggedInUser=""
@@ -646,7 +648,7 @@ function maybeRepairOfficeApp() {
     fi
 
     if [[ "${repairPerformed}" == "true" ]]; then
-        info "${appName} repair completed; skipping configuration cleanup to match MOFA behavior"
+        info "${appName} repair completed; skipping configuration cleanup for this run as a documented divergence from MOFA"
         return 2
     fi
 
@@ -742,8 +744,10 @@ function showIntroDialog() {
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
         info "User '${loggedInUser}' cancelled intro dialog"
-        exit 2
+        return "${interactiveCancelReturnCode}"
     fi
+
+    return 0
 }
 
 function parseOperationCSV() {
@@ -824,7 +828,7 @@ function showSelectionDialog() {
         rc=$?
         if [[ ${rc} -ne 0 ]]; then
             info "User '${loggedInUser}' cancelled selection dialog"
-            exit 2
+            return "${interactiveCancelReturnCode}"
         fi
 
         parseDialogSelections "${dialogOutput}"
@@ -928,13 +932,15 @@ function confirmDestructiveSelection() {
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
         info "User '${loggedInUser}' cancelled destructive confirmation"
-        exit 2
+        return "${interactiveCancelReturnCode}"
     fi
 
     if ! grep -Eiq 'confirm_destructive\"?[[:space:]]*:[[:space:]]*(true|1|yes)' "${workDirectory}/destructive.json"; then
         info "Destructive confirmation checkbox not acknowledged"
         exit 2
     fi
+
+    return 0
 }
 
 function startProgressDialog() {
@@ -2567,11 +2573,31 @@ function main() {
     preflightChecks
 
     showIntroDialog
+    local dialogRC=$?
+    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
+        exit 0
+    elif [[ ${dialogRC} -ne 0 ]]; then
+        exit "${dialogRC}"
+    fi
+
     showSelectionDialog
+    dialogRC=$?
+    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
+        exit 0
+    elif [[ ${dialogRC} -ne 0 ]]; then
+        exit "${dialogRC}"
+    fi
+
     validateSelectedOperations
     resolveDependencies
     sortOperationsByExecutionPhase
     confirmDestructiveSelection
+    dialogRC=$?
+    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
+        exit 0
+    elif [[ ${dialogRC} -ne 0 ]]; then
+        exit "${dialogRC}"
+    fi
 
     info "Resolved operations: ${resolvedOperations[*]}"
 

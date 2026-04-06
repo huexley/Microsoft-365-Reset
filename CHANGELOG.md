@@ -2,7 +2,9 @@
 
 ## Changelog
 
-### Unreleased
+### Version 1.0.0b3 (06-Apr-2026)
+- Fresh run of `scripts/mofa-consult.zsh` to sync with the latest MOFA stable feed and generate an updated local inclusion report for this repo
+- Modified interactive user cancellations to exit cleanly so Jamf Pro policy logs do not report them as failures.
 
 ### Version 1.0.0b2 (31-Mar-2026)
 - Added `scripts/mofa-consult.zsh` to sync a sibling `../MOFA` checkout from upstream MOFA and generate a local inclusion report for this repo

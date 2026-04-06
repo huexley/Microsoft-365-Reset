@@ -32,11 +32,19 @@ Microsoft 365 Reset should provide a safe, clear, swiftDialog-driven workflow to
 
 ## Implementation Priorities
 
-1. Keep behavior aligned with intended package-era functionality.
-2. Preserve operator and end-user clarity in dialog text and warnings.
-3. Keep changes minimal, targeted, and safe.
-4. Maintain deterministic execution and reliable failure handling.
-5. Keep docs synchronized with script behavior.
+1. Treat current MOFA behavior as the primary parity baseline for reset and removal workflows.
+2. Use the package-era reference to preserve retained chooser logic, dependency relationships, and legacy coverage where MOFA does not provide a current equivalent.
+3. Preserve operator and end-user clarity in dialog text and warnings.
+4. Keep changes minimal, targeted, and safe.
+5. Maintain deterministic execution and reliable failure handling.
+6. Keep docs synchronized with script behavior.
+
+## Behavior Precedence
+
+- Prefer MOFA behavior over package-era behavior by default.
+- Use the package-era reference as secondary context unless MOFA does not cover the behavior in question.
+- Keep any divergence from MOFA only when there is a defensible product, safety, platform, or workflow reason.
+- When diverging from MOFA, document the reason in `README.md` and call out the parity impact in change notes or review summaries.
 
 ## Key Files
 

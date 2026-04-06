@@ -14,6 +14,7 @@ setopt PIPE_FAIL
 autoload -Uz is-at-least
 
 scriptName="mofa-consult"
+scriptVersion="1.0.0b3"
 defaultMofaRepo="../MOFA"
 defaultOutputPath="/var/tmp/M365R-MOFA-report.md"
 upstreamURL="https://github.com/cocopuff2u/MOFA.git"
@@ -21,6 +22,9 @@ upstreamURL="https://github.com/cocopuff2u/MOFA.git"
 scriptDirectory="$(cd "$(dirname "$0")" && pwd)"
 repoRoot="$(cd "${scriptDirectory}/.." && pwd)"
 m365ScriptPath="${repoRoot}/Microsoft-365-Reset.zsh"
+readmePath="${repoRoot}/README.md"
+agentsPath="${repoRoot}/AGENTS.md"
+distributionPath="${repoRoot}/Resources/Microsoft_Office_Reset_2.0.0b1_expanded/Distribution"
 
 mofaRepoPath="${defaultMofaRepo}"
 outputPath="${defaultOutputPath}"
@@ -96,6 +100,18 @@ function appendReportLine() {
     reportLines+=("${1}")
 }
 
+function emitCodexPrompt() {
+    local codexPrompt
+
+    codexPrompt="Use \$workspace to review ${outputPath}, then inspect ${m365ScriptPath}, ${readmePath}, and ${agentsPath}. Evaluate the candidate inclusion items, intentional divergences, and local-only operations against the current Microsoft 365 Reset behavior and maintainer guidance, then recommend any safe follow-up changes for this repo."
+
+    print -r -- "Codex Chat prompt: ${codexPrompt}"
+    if command -v pbcopy >/dev/null 2>&1; then
+        print -rn -- "${codexPrompt}" | pbcopy
+        print -r -- "Codex Chat prompt copied to clipboard."
+    fi
+}
+
 function addCandidateItem() {
     candidateItems+=("${1}")
 }
@@ -162,6 +178,67 @@ function extractFeedField() {
 function scriptContainsOperation() {
     local operationID="${1}"
     /usr/bin/grep -q "function op_${operationID}()" "${m365ScriptPath}"
+}
+
+function distributionContainsChoice() {
+    local choiceID="${1}"
+    /usr/bin/grep -Fq "${choiceID}" "${distributionPath}"
+}
+
+function appendPackageEraSection() {
+    local distributionURL
+    local operationID
+    local localOpLabel
+    local classification
+    local note
+
+    typeset -A packageChoiceIDForOperation
+    typeset -A packageEraReason
+
+    local packageEraOnlyOperations=(
+        remove_onenote_data
+        remove_defender
+    )
+
+    packageChoiceIDForOperation[remove_onenote_data]="com.microsoft.remove.OneNote.Data"
+    packageChoiceIDForOperation[remove_defender]="com.microsoft.remove.Defender"
+
+    packageEraReason[remove_onenote_data]="Package-era OneNote cached data removal workflow retained from the original Distribution."
+    packageEraReason[remove_defender]="Package-era Defender removal workflow retained from the original Distribution."
+
+    appendReportLine ""
+    appendReportLine "## Package-Era Operations"
+    appendReportLine ""
+
+    if [[ ! -f "${distributionPath}" ]]; then
+        warning "Package-era Distribution not found; skipping package-era coverage section: ${distributionPath}"
+        appendReportLine "_Skipped: package-era Distribution reference not found at \`${distributionPath}\`._"
+        return 0
+    fi
+
+    distributionURL="$(pathToFileURL "${distributionPath}")"
+    appendReportLine "| Package Reference | Local Operation | Classification | Notes |"
+    appendReportLine "| --- | --- | --- | --- |"
+
+    for operationID in "${packageEraOnlyOperations[@]}"; do
+        localOpLabel="${operationID}"
+        classification="Covered"
+        note="${packageEraReason[${operationID}]}"
+
+        if ! distributionContainsChoice "${packageChoiceIDForOperation[${operationID}]}"; then
+            classification="Candidate inclusion"
+            note="Expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing from the local reference."
+            addCandidateItem "${operationID}: expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing"
+        elif ! scriptContainsOperation "${operationID}"; then
+            classification="Candidate inclusion"
+            note="Package-era Distribution includes this operation, but the local operation is missing from Microsoft-365-Reset.zsh."
+            addCandidateItem "${operationID}: package-era Distribution includes this operation but the local operation is missing"
+        else
+            note="${note} Current local operation remains present."
+        fi
+
+        appendReportLine "| [Distribution](${distributionURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
+    done
 }
 
 function ensureUpstreamRemote() {
@@ -256,9 +333,7 @@ function buildScriptCoverageSection() {
     )
 
     local localOnlyOperations=(
-        remove_onenote_data
         reset_teams_force
-        remove_defender
         remove_acrobat_addin
     )
 
@@ -290,9 +365,7 @@ function buildScriptCoverageSection() {
     intentionalNoteForOperation[reset_license]="README parity note: reset_license and reset_credentials split MOFA's license-only and broader sign-in reset flows."
     intentionalNoteForOperation[reset_credentials]="README parity note: reset_license and reset_credentials split MOFA's license-only and broader sign-in reset flows."
 
-    localOnlyReason[remove_onenote_data]="Local-only cached OneNote data removal workflow."
     localOnlyReason[reset_teams_force]="Local-only force-reinstall path for Teams."
-    localOnlyReason[remove_defender]="Local-only Defender removal workflow."
     localOnlyReason[remove_acrobat_addin]="Local-only Adobe Acrobat add-in cleanup workflow."
 
     appendReportLine "## Script Coverage"
@@ -326,6 +399,8 @@ function buildScriptCoverageSection() {
 
         appendReportLine "| [$(basename "${mofaScriptRelativePath}")](${mofaScriptURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
     done
+
+    appendPackageEraSection
 
     appendReportLine ""
     appendReportLine "## Local-Only Operations"
@@ -556,6 +631,7 @@ function buildReport() {
     buildScriptCoverageSection
     buildFeedComparisonSection
     writeReport
+    emitCodexPrompt
 }
 
 function validateInputs() {

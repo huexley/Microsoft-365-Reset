@@ -22,6 +22,7 @@ Icon?
 .zcompdump*
 .zcompcache/
 *.zwc
+.envrc
 
 ### Local deployment helper artifacts
 /.deployMicrosoft365Reset.zsh

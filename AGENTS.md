@@ -6,7 +6,7 @@ Guidance for coding agents working in this repository.
 
 - Project: Microsoft 365 Reset
 - Primary artifact: `Microsoft-365-Reset.zsh`
-- Package-era behavior reference: `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/`
+- Package-era behavior reference: `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/` when available locally
 - Primary docs: `README.md` and `CHANGELOG.md`
 
 ## Mission
@@ -32,11 +32,20 @@ Microsoft 365 Reset should provide a safe, clear, swiftDialog-driven workflow to
 
 ## Implementation Priorities
 
-1. Keep behavior aligned with intended package-era functionality.
-2. Preserve operator and end-user clarity in dialog text and warnings.
-3. Keep changes minimal, targeted, and safe.
-4. Maintain deterministic execution and reliable failure handling.
-5. Keep docs synchronized with script behavior.
+1. Treat current MOFA behavior as the primary parity baseline for reset and removal workflows.
+2. Use the package-era reference to preserve retained chooser logic, dependency relationships, and legacy coverage where MOFA does not provide a current equivalent.
+3. Preserve operator and end-user clarity in dialog text and warnings.
+4. Keep changes minimal, targeted, and safe.
+5. Maintain deterministic execution and reliable failure handling.
+6. Keep docs synchronized with script behavior.
+
+## Behavior Precedence
+
+- Prefer MOFA behavior over package-era behavior by default.
+- Use the package-era reference as secondary context unless MOFA does not cover the behavior in question.
+- Treat package-era report coverage in `scripts/mofa-consult.zsh` as optional maintainer context when the local expanded package reference is unavailable.
+- Keep any divergence from MOFA only when there is a defensible product, safety, platform, or workflow reason.
+- When diverging from MOFA, document the reason in `README.md` and call out the parity impact in change notes or review summaries.
 
 ## Key Files
 
@@ -44,7 +53,7 @@ Microsoft 365 Reset should provide a safe, clear, swiftDialog-driven workflow to
 - `scripts/mofa-consult.zsh`: maintainer helper for MOFA sync and inclusion reporting
 - `README.md`: usage and behavior documentation
 - `CHANGELOG.md`: release/change history
-- `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/`: original package scripts and Distribution reference
+- `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/`: optional local package-era scripts and Distribution reference used for secondary maintainer comparisons
 - `.gitignore`: ignore rules for expanded package artifacts
 
 ## Scripting Style (Required)
@@ -76,13 +85,15 @@ Maintain the established style of `Microsoft-365-Reset.zsh` unless the user expl
 1. Run `zsh -n` against every modified Zsh file (required).
 2. At minimum, run `zsh -n Microsoft-365-Reset.zsh` after modifying the main script and `zsh -n scripts/mofa-consult.zsh` after modifying the MOFA helper.
 3. Verify behavior-sensitive changes against operation flow (`self-service` and `silent` assumptions).
-4. Update `README.md` when behavior, parameters, or examples change.
-5. Update `CHANGELOG.md` for meaningful user-visible behavior changes.
-6. Do not add new production dependencies without explicit user confirmation.
+4. When changing `scripts/mofa-consult.zsh`, preserve clean report generation both when the package-era expanded reference is present and when it is absent.
+5. Update `README.md` when behavior, parameters, or examples change.
+6. Update `CHANGELOG.md` for meaningful user-visible behavior changes.
+7. Do not add new production dependencies without explicit user confirmation.
 
 ## Change Discipline
 
 - Prefer minimal, targeted edits over broad rewrites.
 - Avoid hidden behavior changes during refactors.
 - If changing operation behavior, call out parity impact explicitly.
+- For maintainer-only reporting changes, prefer warning-and-skip behavior over aborting when optional local reference artifacts are missing.
 - Keep naming, formatting, and copy consistent with existing script patterns.

@@ -1,8 +1,8 @@
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/dan-snelson/Microsoft-365-Reset?display_name=tag) ![GitHub issues](https://img.shields.io/github/issues-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/dan-snelson/Microsoft-365-Reset) ![GitHub pull requests](https://img.shields.io/github/issues-pr-raw/dan-snelson/Microsoft-365-Reset) ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed-raw/dan-snelson/Microsoft-365-Reset)
 
-# Microsoft 365 Reset (1.0.0b2)
+# Microsoft 365 Reset (1.0.0b3)
 
-<img src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b2" width="128" height="128" />
+<img src="images/Microsoft_365_Reset.png" alt="Version 1.0.0b3" width="128" height="128" />
 
 Unified `zsh` script to repair, reset, or remove Microsoft 365 components on macOS:
 
@@ -22,7 +22,7 @@ The script consolidates expanded package workflows into one root-run tool with:
 - Auto-repair for selected Microsoft apps using Microsoft-hosted packages
 - MOFA community-maintained reset script contents adapted into the unified workflow
 
-[MOFA](https://mofa.cocolabs.dev/macos_tools/microsoft_office_repair_tools.html) parity notes:
+[MOFA](https://mofa.cocolabs.dev/macos_tools/microsoft_office_repair_tools.html) alignment and intentional divergence notes:
 
 - `reset_factory` performs its own MOFA-style suite cleanup in addition to dependency expansion
 - App repair/reinstall flows for Word, Excel, PowerPoint, Outlook, and OneNote now stop after repair instead of continuing with configuration cleanup in the same run
@@ -161,7 +161,7 @@ In interactive modes, a second confirmation dialog is required when any of these
 - `remove_outlook_data`
 - `remove_onenote_data`
 
-If confirmation is cancelled or not acknowledged, script exits with code `2`.
+If the user cancels this confirmation dialog, the script exits cleanly with code `0`. If the confirmation payload is not acknowledged, the script exits with code `2`.
 
 ## Execution Order
 
@@ -242,6 +242,8 @@ sudo ./Microsoft-365-Reset.zsh "" "" "" "self-service" "" --mode silent --operat
 
 For repo maintenance, `scripts/mofa-consult.zsh` can sync a sibling `../MOFA` checkout from upstream MOFA and generate a focused inclusion report for this repo. This helper is not used by `Microsoft-365-Reset.zsh` at runtime.
 
+MOFA is the primary behavior baseline for this repo. Use the package-era reference as secondary context for retained chooser logic, dependency history, and operations that do not have a current MOFA community-script equivalent. If this repo intentionally keeps package-era behavior instead of MOFA behavior, treat that as a documented divergence that needs a defensible reason.
+
 By default, the sync step fast-forwards the sibling MOFA checkout's local `main` branch to `upstream/main` and pushes `origin/main` to keep your fork current. Use `--no-push-origin` to skip the fork push.
 
 Default sync + report:
@@ -249,6 +251,10 @@ Default sync + report:
 ```bash
 ./scripts/mofa-consult.zsh
 ```
+
+After any report-generating run, the helper prints a ready-to-paste Codex prompt for reviewing the generated report in this repo context and copies that prompt to the clipboard when `pbcopy` is available.
+
+The package-era comparison is optional. When `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/Distribution` is available locally, the report compares retained package-era operations against the unified workflow. When that local reference is absent, the helper warns and marks the package-era section as `Skipped` instead of failing the full report.
 
 Generate a report from the current local MOFA checkout without syncing:
 
@@ -265,6 +271,7 @@ Sync local `main` from `upstream/main` without pushing your fork:
 The report uses `Covered`, `Candidate inclusion`, `Intentional divergence`, `Local-only operation`, and `Skipped` classifications, and compares:
 
 - MOFA community-maintained reset scripts against local operation coverage
+- Package-era Distribution choices retained in the unified workflow even when there is no current MOFA community-script mapping, when the local expanded package reference is available
 - MOFA stable feed metadata from `latest_raw_files/macos_standalone_latest.json`
 - Hard-coded local repair links, MAU application IDs, and current minimum-version thresholds for Teams and MAU
 - Resolved `file://` links back to the sibling MOFA scripts referenced by the report
@@ -273,8 +280,8 @@ The report uses `Covered`, `Candidate inclusion`, `Intentional divergence`, `Loc
 
 | Code | Meaning |
 |---|---|
-| `0` | Success |
-| `2` | User cancelled or no operations provided in `silent` mode |
+| `0` | Success, including intentional user cancellation in interactive modes |
+| `2` | No operations provided in `silent` mode or destructive confirmation was not acknowledged |
 | `10` | Preflight/validation failure |
 | `20` | One or more operations failed |
 

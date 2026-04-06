@@ -22,7 +22,7 @@ The script consolidates expanded package workflows into one root-run tool with:
 - Auto-repair for selected Microsoft apps using Microsoft-hosted packages
 - MOFA community-maintained reset script contents adapted into the unified workflow
 
-[MOFA](https://mofa.cocolabs.dev/macos_tools/microsoft_office_repair_tools.html) parity notes:
+[MOFA](https://mofa.cocolabs.dev/macos_tools/microsoft_office_repair_tools.html) alignment and intentional divergence notes:
 
 - `reset_factory` performs its own MOFA-style suite cleanup in addition to dependency expansion
 - App repair/reinstall flows for Word, Excel, PowerPoint, Outlook, and OneNote now stop after repair instead of continuing with configuration cleanup in the same run
@@ -254,6 +254,8 @@ Default sync + report:
 
 After any report-generating run, the helper prints a ready-to-paste Codex prompt for reviewing the generated report in this repo context and copies that prompt to the clipboard when `pbcopy` is available.
 
+The package-era comparison is optional. When `Resources/Microsoft_Office_Reset_2.0.0b1_expanded/Distribution` is available locally, the report compares retained package-era operations against the unified workflow. When that local reference is absent, the helper warns and marks the package-era section as `Skipped` instead of failing the full report.
+
 Generate a report from the current local MOFA checkout without syncing:
 
 ```bash
@@ -269,7 +271,7 @@ Sync local `main` from `upstream/main` without pushing your fork:
 The report uses `Covered`, `Candidate inclusion`, `Intentional divergence`, `Local-only operation`, and `Skipped` classifications, and compares:
 
 - MOFA community-maintained reset scripts against local operation coverage
-- Package-era Distribution choices retained in the unified workflow even when there is no current MOFA community-script mapping
+- Package-era Distribution choices retained in the unified workflow even when there is no current MOFA community-script mapping, when the local expanded package reference is available
 - MOFA stable feed metadata from `latest_raw_files/macos_standalone_latest.json`
 - Hard-coded local repair links, MAU application IDs, and current minimum-version thresholds for Teams and MAU
 - Resolved `file://` links back to the sibling MOFA scripts referenced by the report

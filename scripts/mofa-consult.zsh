@@ -185,6 +185,62 @@ function distributionContainsChoice() {
     /usr/bin/grep -Fq "${choiceID}" "${distributionPath}"
 }
 
+function appendPackageEraSection() {
+    local distributionURL
+    local operationID
+    local localOpLabel
+    local classification
+    local note
+
+    typeset -A packageChoiceIDForOperation
+    typeset -A packageEraReason
+
+    local packageEraOnlyOperations=(
+        remove_onenote_data
+        remove_defender
+    )
+
+    packageChoiceIDForOperation[remove_onenote_data]="com.microsoft.remove.OneNote.Data"
+    packageChoiceIDForOperation[remove_defender]="com.microsoft.remove.Defender"
+
+    packageEraReason[remove_onenote_data]="Package-era OneNote cached data removal workflow retained from the original Distribution."
+    packageEraReason[remove_defender]="Package-era Defender removal workflow retained from the original Distribution."
+
+    appendReportLine ""
+    appendReportLine "## Package-Era Operations"
+    appendReportLine ""
+
+    if [[ ! -f "${distributionPath}" ]]; then
+        warning "Package-era Distribution not found; skipping package-era coverage section: ${distributionPath}"
+        appendReportLine "_Skipped: package-era Distribution reference not found at \`${distributionPath}\`._"
+        return 0
+    fi
+
+    distributionURL="$(pathToFileURL "${distributionPath}")"
+    appendReportLine "| Package Reference | Local Operation | Classification | Notes |"
+    appendReportLine "| --- | --- | --- | --- |"
+
+    for operationID in "${packageEraOnlyOperations[@]}"; do
+        localOpLabel="${operationID}"
+        classification="Covered"
+        note="${packageEraReason[${operationID}]}"
+
+        if ! distributionContainsChoice "${packageChoiceIDForOperation[${operationID}]}"; then
+            classification="Candidate inclusion"
+            note="Expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing from the local reference."
+            addCandidateItem "${operationID}: expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing"
+        elif ! scriptContainsOperation "${operationID}"; then
+            classification="Candidate inclusion"
+            note="Package-era Distribution includes this operation, but the local operation is missing from Microsoft-365-Reset.zsh."
+            addCandidateItem "${operationID}: package-era Distribution includes this operation but the local operation is missing"
+        else
+            note="${note} Current local operation remains present."
+        fi
+
+        appendReportLine "| [Distribution](${distributionURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
+    done
+}
+
 function ensureUpstreamRemote() {
     local currentURL
     currentURL="$(git -C "${mofaRepoPath}" remote get-url upstream 2>/dev/null)"
@@ -252,12 +308,9 @@ function buildScriptCoverageSection() {
     local mofaScriptPath
     local mofaScriptURL
     local localOpLabel
-    local distributionURL
 
     typeset -A mofaScriptPathForOperation
     typeset -A intentionalNoteForOperation
-    typeset -A packageChoiceIDForOperation
-    typeset -A packageEraReason
     typeset -A localOnlyReason
 
     local mappedOperations=(
@@ -277,11 +330,6 @@ function buildScriptCoverageSection() {
         remove_skypeforbusiness
         remove_zoomplugin
         remove_webexpt
-    )
-
-    local packageEraOnlyOperations=(
-        remove_onenote_data
-        remove_defender
     )
 
     local localOnlyOperations=(
@@ -316,12 +364,6 @@ function buildScriptCoverageSection() {
     intentionalNoteForOperation[reset_autoupdate]="README parity note: AutoUpdate registration treats new Teams as TEAMS21 while keeping classic Teams on the legacy product ID."
     intentionalNoteForOperation[reset_license]="README parity note: reset_license and reset_credentials split MOFA's license-only and broader sign-in reset flows."
     intentionalNoteForOperation[reset_credentials]="README parity note: reset_license and reset_credentials split MOFA's license-only and broader sign-in reset flows."
-
-    packageChoiceIDForOperation[remove_onenote_data]="com.microsoft.remove.OneNote.Data"
-    packageChoiceIDForOperation[remove_defender]="com.microsoft.remove.Defender"
-
-    packageEraReason[remove_onenote_data]="Package-era OneNote cached data removal workflow retained from the original Distribution."
-    packageEraReason[remove_defender]="Package-era Defender removal workflow retained from the original Distribution."
 
     localOnlyReason[reset_teams_force]="Local-only force-reinstall path for Teams."
     localOnlyReason[remove_acrobat_addin]="Local-only Adobe Acrobat add-in cleanup workflow."
@@ -358,34 +400,7 @@ function buildScriptCoverageSection() {
         appendReportLine "| [$(basename "${mofaScriptRelativePath}")](${mofaScriptURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
     done
 
-    [[ -f "${distributionPath}" ]] || dieReport "Package-era Distribution not found: ${distributionPath}"
-    distributionURL="$(pathToFileURL "${distributionPath}")"
-
-    appendReportLine ""
-    appendReportLine "## Package-Era Operations"
-    appendReportLine ""
-    appendReportLine "| Package Reference | Local Operation | Classification | Notes |"
-    appendReportLine "| --- | --- | --- | --- |"
-
-    for operationID in "${packageEraOnlyOperations[@]}"; do
-        localOpLabel="${operationID}"
-        classification="Covered"
-        note="${packageEraReason[${operationID}]}"
-
-        if ! distributionContainsChoice "${packageChoiceIDForOperation[${operationID}]}"; then
-            classification="Candidate inclusion"
-            note="Expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing from the local reference."
-            addCandidateItem "${operationID}: expected package-era Distribution choice ${packageChoiceIDForOperation[${operationID}]} is missing"
-        elif ! scriptContainsOperation "${operationID}"; then
-            classification="Candidate inclusion"
-            note="Package-era Distribution includes this operation, but the local operation is missing from Microsoft-365-Reset.zsh."
-            addCandidateItem "${operationID}: package-era Distribution includes this operation but the local operation is missing"
-        else
-            note="${note} Current local operation remains present."
-        fi
-
-        appendReportLine "| [Distribution](${distributionURL}) | \`${localOpLabel}\` | ${classification} | $(escapeForMarkdown "${note}") |"
-    done
+    appendPackageEraSection
 
     appendReportLine ""
     appendReportLine "## Local-Only Operations"

@@ -11,6 +11,8 @@ on:
     branches:
       - main
       - development
+  schedule:
+    - cron: '43 2 * * 3'
   workflow_dispatch:
 
 permissions: read-all

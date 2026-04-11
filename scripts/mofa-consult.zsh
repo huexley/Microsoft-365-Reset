@@ -1,4 +1,6 @@
 #!/bin/zsh --no-rcs
+# shellcheck shell=bash
+# ShellCheck has no zsh mode; bash parser is used for baseline linting.
 
 ####################################################################################################
 #

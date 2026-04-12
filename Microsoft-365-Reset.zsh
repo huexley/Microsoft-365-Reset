@@ -1,6 +1,7 @@
 #!/bin/zsh --no-rcs
 # shellcheck shell=bash
 # ShellCheck has no zsh mode; bash parser is used for baseline linting.
+# shellcheck disable=SC2317,SC2034
 
 ####################################################################################################
 #

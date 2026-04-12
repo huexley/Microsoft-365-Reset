@@ -208,6 +208,79 @@ jobs:
           } >> "${GITHUB_STEP_SUMMARY}"
           exit 1
 
+  zsh_syntax:
+    name: Zsh Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Out Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Zsh
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes zsh
+
+      - name: Collect Zsh Targets
+        id: collect_targets
+        shell: bash
+        run: |
+          git ls-files '*.zsh' > zsh-targets.txt
+          count="$(grep -c '.' zsh-targets.txt || true)"
+          echo "count=${count}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run zsh -n
+        id: zsh_syntax
+        if: steps.collect_targets.outputs.count != '0'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          status=0
+
+          while IFS= read -r file; do
+            [[ -z "${file}" ]] && continue
+            if ! zsh -n "${file}"; then
+              status=1
+            fi
+          done < zsh-targets.txt
+
+          set -e
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+
+      - name: Finalize Zsh Syntax Result
+        if: success() || failure()
+        shell: bash
+        run: |
+          target_count="${{ steps.collect_targets.outputs.count }}"
+          syntax_status="${{ steps.zsh_syntax.outputs.status }}"
+
+          if [[ "${target_count}" == "0" ]]; then
+            {
+              echo "### Zsh Syntax"
+              echo
+              echo "✅ No tracked zsh files matched the scan patterns."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          {
+            echo "### Zsh Syntax"
+            echo
+            echo "- Files scanned: ${target_count}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${syntax_status}" == "0" ]]; then
+            echo "" >> "${GITHUB_STEP_SUMMARY}"
+            echo "✅ All zsh files passed \`zsh -n\`" >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "❌ zsh syntax errors found" >> "${GITHUB_STEP_SUMMARY}"
+          exit 1
+
   shellcheck:
     name: ShellCheck
     runs-on: ubuntu-latest
@@ -227,7 +300,7 @@ jobs:
         id: collect_targets
         shell: bash
         run: |
-          git ls-files '*.zsh' '*.sh' '*.bash' > shellcheck-targets.txt
+          git ls-files '*.sh' '*.bash' > shellcheck-targets.txt
           count="$(grep -c '.' shellcheck-targets.txt || true)"
           echo "count=${count}" >> "${GITHUB_OUTPUT}"
 
@@ -307,7 +380,7 @@ jobs:
             {
               echo "### ShellCheck"
               echo
-              echo "✅ No tracked shell files matched the scan patterns."
+              echo "✅ No tracked sh/bash files matched the scan patterns."
             } >> "${GITHUB_STEP_SUMMARY}"
             exit 0
           fi
@@ -337,6 +410,7 @@ jobs:
     needs:
       - semgrep
       - gitleaks
+      - zsh_syntax
       - shellcheck
     steps:
       - name: Security Scan Complete
@@ -345,6 +419,7 @@ jobs:
         run: |
           semgrep_result="${{ needs.semgrep.result }}"
           gitleaks_result="${{ needs.gitleaks.result }}"
+          zsh_syntax_result="${{ needs.zsh_syntax.result }}"
           shellcheck_result="${{ needs.shellcheck.result }}"
 
           badge() {
@@ -358,22 +433,23 @@ jobs:
 
           semgrep_badge="$(badge "${semgrep_result}")"
           gitleaks_badge="$(badge "${gitleaks_result}")"
+          zsh_syntax_badge="$(badge "${zsh_syntax_result}")"
           shellcheck_badge="$(badge "${shellcheck_result}")"
 
           {
             echo "## Security Scan Summary"
             echo
-            echo "Semgrep ${semgrep_badge} | Gitleaks ${gitleaks_badge} | ShellCheck ${shellcheck_badge}"
+            echo "Semgrep ${semgrep_badge} | Gitleaks ${gitleaks_badge} | Zsh Syntax ${zsh_syntax_badge} | ShellCheck ${shellcheck_badge}"
             echo
-            if [[ "${semgrep_result}" == "success" && "${gitleaks_result}" == "success" && "${shellcheck_result}" == "success" ]]; then
+            if [[ "${semgrep_result}" == "success" && "${gitleaks_result}" == "success" && "${zsh_syntax_result}" == "success" && "${shellcheck_result}" == "success" ]]; then
               echo "🐉 Mac Admin Security Dragon Slain"
             else
               echo "⚠️ Security Scan requires attention"
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
-          echo "Semgrep ${semgrep_badge} | Gitleaks ${gitleaks_badge} | ShellCheck ${shellcheck_badge}"
-          if [[ "${semgrep_result}" == "success" && "${gitleaks_result}" == "success" && "${shellcheck_result}" == "success" ]]; then
+          echo "Semgrep ${semgrep_badge} | Gitleaks ${gitleaks_badge} | Zsh Syntax ${zsh_syntax_badge} | ShellCheck ${shellcheck_badge}"
+          if [[ "${semgrep_result}" == "success" && "${gitleaks_result}" == "success" && "${zsh_syntax_result}" == "success" && "${shellcheck_result}" == "success" ]]; then
             echo "🐉 Mac Admin Security Dragon Slain"
             exit 0
           fi

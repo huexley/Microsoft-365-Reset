@@ -45,7 +45,9 @@ We will work with you to understand, reproduce, and fix the issue, then coordina
 
 ## Code Security Practices
 
-- This repository is scanned with **Semgrep** (r2c-security-audit ruleset + custom Mac Admin patterns).
+- This repository is scanned with **Semgrep** using the `p/r2c-security-audit`, `p/ci`, and `p/secrets` rulesets.
+- Tracked `*.zsh` files are syntax-checked with `zsh -n`.
+- Tracked `*.sh` and `*.bash` files are linted with **ShellCheck** when present in the repository.
 - We avoid dangerous patterns common in shell scripts (e.g., unsafe `eval`, unquoted variables where possible, etc.).
 - All external downloads (swiftDialog, Microsoft packages) are verified where feasible.
 - Contributions are reviewed for security impact before merging.

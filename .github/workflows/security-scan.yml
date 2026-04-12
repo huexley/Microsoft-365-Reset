@@ -1,4 +1,4 @@
-# Protects Microsoft-365-Reset from common vulnerabilities with Semgrep, Gitleaks, and ShellCheck. Semgrep findings are uploaded to GitHub code scanning for visibility in the Security tab and PR annotations. Gitleaks comments on PRs when potential secrets are detected. ShellCheck provides annotations for shell script issues, with blocking severity for all but SC1090/SC1091 which are informational due to common dynamic sourcing patterns in the repository.
+# Protects Microsoft-365-Reset from common vulnerabilities with Semgrep, Gitleaks, zsh syntax validation, and ShellCheck for tracked sh/bash files. Semgrep findings are uploaded to GitHub code scanning for visibility in the Security tab and PR annotations. Gitleaks comments on PRs when potential secrets are detected. ShellCheck provides annotations for tracked sh/bash issues, with blocking severity for all but SC1090/SC1091 which are informational due to common dynamic sourcing patterns in shell projects.
 
 name: Security Scan
 
@@ -290,12 +290,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install ShellCheck
-        # Native ShellCheck keeps permissions minimal while still producing strong annotations.
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes shellcheck
-
       - name: Collect Shell Targets
         id: collect_targets
         shell: bash
@@ -303,6 +297,13 @@ jobs:
           git ls-files '*.sh' '*.bash' > shellcheck-targets.txt
           count="$(grep -c '.' shellcheck-targets.txt || true)"
           echo "count=${count}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install ShellCheck
+        if: steps.collect_targets.outputs.count != '0'
+        # Native ShellCheck keeps permissions minimal while still producing strong annotations.
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
 
       - name: Run Blocking ShellCheck Pass
         id: shellcheck_blocking
@@ -321,6 +322,9 @@ jobs:
           from pathlib import Path
           import re
 
+          def escape_workflow_command(value):
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
           pattern = re.compile(r"^(.*?):(\d+):(\d+):\s+([a-z]+):\s+(.*)$")
           for line in Path("shellcheck-blocking.gcc").read_text().splitlines():
               match = pattern.match(line)
@@ -329,7 +333,7 @@ jobs:
                   continue
               file_path, line_no, col_no, level, message = match.groups()
               annotation = "error" if level == "error" else "warning"
-              print(f"::{annotation} file={file_path},line={line_no},col={col_no}::{message}")
+              print(f"::{annotation} file={file_path},line={line_no},col={col_no}::{escape_workflow_command(message)}")
           PY
 
           issue_count="$(grep -c '.' shellcheck-blocking.gcc || true)"
@@ -353,6 +357,9 @@ jobs:
           from pathlib import Path
           import re
 
+          def escape_workflow_command(value):
+              return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
           pattern = re.compile(r"^(.*?):(\d+):(\d+):\s+([a-z]+):\s+(.*)$")
           for line in Path("shellcheck-info.gcc").read_text().splitlines():
               match = pattern.match(line)
@@ -360,7 +367,7 @@ jobs:
                   print(line)
                   continue
               file_path, line_no, col_no, _, message = match.groups()
-              print(f"::notice file={file_path},line={line_no},col={col_no}::{message}")
+              print(f"::notice file={file_path},line={line_no},col={col_no}::{escape_workflow_command(message)}")
           PY
 
           issue_count="$(grep -c '.' shellcheck-info.gcc || true)"

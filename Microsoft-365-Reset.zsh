@@ -1,4 +1,6 @@
 #!/bin/zsh --no-rcs
+# shellcheck shell=bash
+# ShellCheck has no zsh mode; bash parser is used for baseline linting.
 
 ####################################################################################################
 #
@@ -12,8 +14,41 @@
 #
 # HISTORY
 #
-# Version 1.0.0, 13-Apr-2026, Dan K. Snelson (@dan-snelson)
-#  - Official 1.0.0 release
+# Version 1.0.0b2, 31-Mar-2026, Dan K. Snelson (@dan-snelson)
+#   - Align Outlook primary repair URL with current MOFA stable feed
+#
+# Version 1.0.0b2-hep3-fr, 03-Apr-2026, Yannick (HEP Vaud, @huexley)
+#   French localization and HEP Vaud-specific adaptations for classroom deployment.
+#
+#   - PATCH 1: Centralize all user-facing strings and translate to French
+#              (all dialog copy, progress messages, confirmation prompts, and
+#              completion summaries moved to STR_* variables at the top of the
+#              script to ease future translation work).
+#
+#   - PATCH 2: Auto-repair / reinstall is now disabled by default
+#              (autoRepairEnabled="false"). An optional dialog ("askReinstallOption")
+#              lets the technician opt-in at runtime. Rationale: HEP Vaud lab Macs
+#              should not pull Microsoft packages during a reset — reinstallation
+#              is handled by a separate Jamf policy using the org-packaged installer.
+#
+#   - PATCH 3: Replace the end-of-run "Restart" prompt with a "Log out" recommendation
+#              (restartMode="Logout"). On a shared HEP Vaud workstation a full
+#              restart would unnecessarily disrupt the next user's session; logout
+#              is sufficient to clear user-scoped Office state.
+#
+#   - PATCH 4: Remove the introductory splash dialog. Technicians using this tool
+#              in Self Service already know what it does; the extra click was noise.
+#
+#   - PATCH 5: Remove operations that are not relevant to the HEP Vaud fleet:
+#                * remove_skypeforbusiness (Skype for Business is decommissioned)
+#                * remove_defender          (Defender is not deployed at HEP Vaud)
+#                * reset_autoupdate         (MAU is managed centrally via Jamf)
+#
+#   - PATCH 6: Add a new operation "creation_poste_examen" (Exam station creation).
+#              Hardens a Mac before high-stakes exam use by disabling spelling /
+#              grammar assistance and freezing Microsoft AutoUpdate so Office
+#              cannot silently change version or behavior during the exam window.
+#              See the op_creation_poste_examen function below for details.
 #
 ####################################################################################################
 
@@ -29,7 +64,7 @@ export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin/
 setopt NONOMATCH
 
 # Script identity
-scriptVersion="1.0.0"
+scriptVersion="1.0.0b2"
 humanReadableScriptName="Microsoft 365 Reset"
 scriptName="M365R"
 
@@ -45,7 +80,7 @@ applicationIcon="https://usw2.ics.services.jamfcloud.com/icon/hash_8bf6549c22de3
 autoload -Uz is-at-least
 
 # swiftDialog requirement and install paths
-swiftDialogMinimumRequiredVersion="3.0.1.4955"
+swiftDialogMinimumRequiredVersion="3.0.0.4952"
 dialogBinary="/usr/local/bin/dialog"
 
 # Runtime inputs (Jamf parameters by default; CLI flags can override below)
@@ -54,8 +89,9 @@ operationCSV="${5:-}"
 
 # Client-side Log
 scriptLog="/var/log/org.churchofjesuschrist.log"
-restartMode="Restart Confirm"
+restartMode="Logout"
 restartPromptEnabled="true"
+autoRepairEnabled="false"                    # PATCH 2 : désactivé par défaut, activable via dialog
 
 # CLI flags override Jamf parameters; skip all leading positionals until we see a CLI flag
 seenCLIFlag="false"
@@ -121,9 +157,7 @@ selectedOperations=()
 resolvedOperations=()
 failedOperations=()
 completedOperations=()
-repairedOperations=()
 dialogPID=""
-interactiveCancelReturnCode="30"
 
 # Logged-in user context (resolved during preflight)
 loggedInUser=""
@@ -145,60 +179,54 @@ operationIDs=(
     reset_onedrive
     reset_teams
     reset_teams_force
-    reset_autoupdate
     reset_license
     reset_credentials
+    creation_poste_examen
     remove_office
-    remove_skypeforbusiness
-    remove_defender
     remove_acrobat_addin
     remove_zoomplugin
     remove_webexpt
 )
 
 typeset -A operationTitle
-operationTitle[reset_factory]="Reset Office apps to factory settings"
-operationTitle[reset_word]="Reset Word"
-operationTitle[reset_excel]="Reset Excel"
-operationTitle[reset_powerpoint]="Reset PowerPoint"
-operationTitle[reset_outlook]="Reset Outlook"
-operationTitle[remove_outlook_data]="Remove cached Outlook data"
-operationTitle[reset_onenote]="Reset OneNote"
-operationTitle[remove_onenote_data]="Remove cached OneNote data"
-operationTitle[reset_onedrive]="Reset OneDrive"
-operationTitle[reset_teams]="Reset Teams"
-operationTitle[reset_teams_force]="Reset Teams (Force Reinstall)"
-operationTitle[reset_autoupdate]="Reset AutoUpdate"
-operationTitle[reset_license]="Reset License Only"
-operationTitle[reset_credentials]="Reset License and Sign-In"
-operationTitle[remove_office]="Completely remove Microsoft 365"
-operationTitle[remove_skypeforbusiness]="Remove Skype for Business"
-operationTitle[remove_defender]="Remove Defender"
-operationTitle[remove_acrobat_addin]="Remove Adobe Acrobat Add-in"
-operationTitle[remove_zoomplugin]="Remove Zoom Outlook Plugin"
-operationTitle[remove_webexpt]="Remove WebEx Productivity Tools"
+operationTitle[reset_factory]="Réinitialisation complète des apps Office"
+operationTitle[reset_word]="Réinitialiser Word"
+operationTitle[reset_excel]="Réinitialiser Excel"
+operationTitle[reset_powerpoint]="Réinitialiser PowerPoint"
+operationTitle[reset_outlook]="Réinitialiser Outlook"
+operationTitle[remove_outlook_data]="Supprimer les données locales Outlook"
+operationTitle[reset_onenote]="Réinitialiser OneNote"
+operationTitle[remove_onenote_data]="Supprimer les données locales OneNote"
+operationTitle[reset_onedrive]="Réinitialiser OneDrive"
+operationTitle[reset_teams]="Réinitialiser Teams"
+operationTitle[reset_teams_force]="Réinitialiser Teams (réinstallation forcée)"
+operationTitle[reset_license]="Réinitialiser la licence uniquement"
+operationTitle[reset_credentials]="Réinitialiser la licence et les identifiants"
+operationTitle[creation_poste_examen]="Création poste examen"
+operationTitle[remove_office]="Supprimer complètement Microsoft 365"
+operationTitle[remove_acrobat_addin]="Supprimer le module Acrobat pour Office"
+operationTitle[remove_zoomplugin]="Supprimer le plugin Zoom pour Outlook"
+operationTitle[remove_webexpt]="Supprimer WebEx Productivity Tools"
 
 typeset -A operationDescription
-operationDescription[reset_factory]="Closes all Office apps, checks for damage and performs repairs as necessary. Resets caches, keychains, templates, add-ins and configuration data. This will not remove your personal documents."
-operationDescription[reset_word]="Closes Microsoft Word, checks for damage and performs repairs as necessary. Resets caches, templates, add-ins and configuration data. This will not remove your personal documents."
-operationDescription[reset_excel]="Closes Microsoft Excel, checks for damage and performs repairs as necessary. Resets caches, templates, add-ins and configuration data. This will not remove your personal workbooks."
-operationDescription[reset_powerpoint]="Closes Microsoft PowerPoint, checks for damage and performs repairs as necessary. Resets caches, templates, add-ins and configuration data. This will not remove your personal presentations."
-operationDescription[reset_outlook]="Closes Microsoft Outlook, checks for damage and performs repairs as necessary. Resets caches, credentials, templates, add-ins and configuration data."
-operationDescription[remove_outlook_data]="Closes Microsoft Outlook and removes all mailbox data. Warning: This will remove all local mailbox data."
-operationDescription[reset_onenote]="Closes Microsoft OneNote, checks for damage and performs repairs as necessary. Resets caches, local synchronized content and configuration data."
-operationDescription[remove_onenote_data]="Closes Microsoft OneNote and removes cached data. Warning: This will remove any content that has not synchronized with the cloud."
-operationDescription[reset_onedrive]="Closes Microsoft OneDrive, checks for damage and performs repairs as necessary. Resets caches and configuration data. This will not remove your synchronized OneDrive files."
-operationDescription[reset_teams]="Closes Microsoft Teams, checks for damage and performs repairs as necessary. Resets caches, credentials and configuration data."
-operationDescription[reset_teams_force]="Closes Microsoft Teams, removes the current Teams app bundle, reinstalls the latest version, and then resets Teams caches, credentials and configuration data."
-operationDescription[reset_autoupdate]="Resets Microsoft AutoUpdate to default settings and installs the latest version of the tool."
-operationDescription[reset_license]="Closes all apps and removes Office licensing files plus core Office identity data without the broader Teams and OneDrive sign-in cleanup."
-operationDescription[reset_credentials]="Closes all apps and removes the Office license files. Sign-in credentials and cached tokens are removed from keychain."
-operationDescription[remove_office]="Removes all Microsoft 365 and Office apps, components, add-ins, templates and configuration data."
-operationDescription[remove_skypeforbusiness]="Closes Microsoft Skype for Business and then removes the application, configuration data, and keychain items."
-operationDescription[remove_defender]="Closes Microsoft Defender and then removes the application, configuration data, and keychain items."
-operationDescription[remove_acrobat_addin]="Removes the Adobe Acrobat add-in files for Word, Excel, and PowerPoint."
-operationDescription[remove_zoomplugin]="Removes the Zoom Plugin for Outlook and associated metadata."
-operationDescription[remove_webexpt]="Removes WebEx Productivity Tools associated metadata."
+operationDescription[reset_factory]="Ferme toutes les apps Office et vérifie leur intégrité. Réinitialise les caches, trousseaux, modèles, modules et données de configuration. Vos documents personnels ne sont pas supprimés."
+operationDescription[reset_word]="Ferme Microsoft Word et vérifie son intégrité. Réinitialise les caches, modèles, modules et données de configuration. Vos documents personnels ne sont pas supprimés."
+operationDescription[reset_excel]="Ferme Microsoft Excel et vérifie son intégrité. Réinitialise les caches, modèles, modules et données de configuration. Vos classeurs personnels ne sont pas supprimés."
+operationDescription[reset_powerpoint]="Ferme Microsoft PowerPoint et vérifie son intégrité. Réinitialise les caches, modèles, modules et données de configuration. Vos présentations personnelles ne sont pas supprimées."
+operationDescription[reset_outlook]="Ferme Microsoft Outlook et vérifie son intégrité. Réinitialise les caches, identifiants, modèles, modules et données de configuration."
+operationDescription[remove_outlook_data]="Ferme Microsoft Outlook et supprime toutes les données de messagerie locales. Attention : cette action est irréversible."
+operationDescription[reset_onenote]="Ferme Microsoft OneNote et vérifie son intégrité. Réinitialise les caches, le contenu synchronisé localement et les données de configuration."
+operationDescription[remove_onenote_data]="Ferme Microsoft OneNote et supprime les données en cache. Attention : tout contenu non synchronisé avec le cloud sera perdu définitivement."
+operationDescription[reset_onedrive]="Ferme Microsoft OneDrive et vérifie son intégrité. Réinitialise les caches et données de configuration. Vos fichiers synchronisés ne sont pas supprimés."
+operationDescription[reset_teams]="Ferme Microsoft Teams et vérifie son intégrité. Réinitialise les caches, identifiants et données de configuration."
+operationDescription[reset_teams_force]="Ferme Microsoft Teams, supprime l'application existante, réinstalle la dernière version, puis réinitialise les caches, identifiants et données de configuration."
+operationDescription[reset_license]="Ferme toutes les apps et supprime les fichiers de licence Office ainsi que les données d'identité principales, sans toucher aux identifiants Teams et OneDrive."
+operationDescription[reset_credentials]="Ferme toutes les apps et supprime les fichiers de licence Office. Les identifiants de connexion et jetons mis en cache sont supprimés du trousseau."
+operationDescription[creation_poste_examen]="Supprime les outils de vérification linguistique de Word (dictionnaires) et verrouille Microsoft AutoUpdate (chmod 000). À utiliser avant un examen nécessitant un environnement contrôlé."
+operationDescription[remove_office]="Supprime toutes les applications Microsoft 365 et Office, leurs composants, modules, modèles et données de configuration."
+operationDescription[remove_acrobat_addin]="Supprime les fichiers du module complémentaire Adobe Acrobat pour Word, Excel et PowerPoint."
+operationDescription[remove_zoomplugin]="Supprime le plugin Zoom pour Outlook et les métadonnées associées."
+operationDescription[remove_webexpt]="Supprime les métadonnées associées à WebEx Productivity Tools."
 
 typeset -A operationIcon
 operationIcon[reset_factory]="${applicationIcon}"
@@ -212,17 +240,86 @@ operationIcon[remove_onenote_data]="https://usw2.ics.services.jamfcloud.com/icon
 operationIcon[reset_onedrive]="https://usw2.ics.services.jamfcloud.com/icon/hash_72e08cf3b2dc4d168dc62faf4fc6821b0e0ec79f3382b1567a02b35176024adc"
 operationIcon[reset_teams]="https://usw2.ics.services.jamfcloud.com/icon/hash_60344669638073113f3ca25e0a60e7080b5141536dbb62d8920d6e21fa70f877"
 operationIcon[reset_teams_force]="https://usw2.ics.services.jamfcloud.com/icon/hash_60344669638073113f3ca25e0a60e7080b5141536dbb62d8920d6e21fa70f877"
-operationIcon[reset_autoupdate]="https://usw2.ics.services.jamfcloud.com/icon/hash_0a0f163704e545ebbca43b4a34d0711777d05fb8d436f42b09f9f9b5e255d494"
 operationIcon[reset_license]="https://usw2.ics.services.jamfcloud.com/icon/hash_84dbce6614758cfb83ed598db296b7e1e9fedc69b81aed9818d95c377b465eaa"
 operationIcon[reset_credentials]="https://usw2.ics.services.jamfcloud.com/icon/hash_518887d8e7866378b4f396939d0a22fc79ab717b60438b0002324303da64c654"
+operationIcon[creation_poste_examen]="https://usw2.ics.services.jamfcloud.com/icon/hash_51ae4c1e37bfbde2097e14712c3c13885157d632105804bcfaa912a627649b4c"
 operationIcon[remove_office]="${applicationIcon}"
-operationIcon[remove_skypeforbusiness]="https://usw2.ics.services.jamfcloud.com/icon/hash_2438bd5113c77d65cba60342ea310dee0b20bf2f8d13e407cd51c49d9035beee"
-operationIcon[remove_defender]="https://usw2.ics.services.jamfcloud.com/icon/hash_7f153abc33e7bff3fa331c7e9d591a4eb74993f28f0f5f0a426b96a7d61f62f3"
 operationIcon[remove_acrobat_addin]="https://usw2.ics.services.jamfcloud.com/icon/hash_836bc15ee3a920f0402f19194aa9a5842180534181f53c4fff0ccd1243b5f897"
 operationIcon[remove_zoomplugin]="https://usw2.ics.services.jamfcloud.com/icon/hash_be66420495a3f2f1981a49a0e0ad31783e9a789e835b4196af60554bf4c115ac"
 operationIcon[remove_webexpt]="https://usw2.ics.services.jamfcloud.com/icon/hash_fa1bd349edd751595ae0f20ab36b8e76199ba66454b7a74cd5d51bb8f0627893"
 
-autoRepairOps=(reset_word reset_excel reset_powerpoint reset_outlook reset_onenote reset_onedrive reset_teams reset_autoupdate)
+autoRepairOps=(reset_word reset_excel reset_powerpoint reset_outlook reset_onenote reset_onedrive reset_teams)
+
+
+####################################################################################################
+#
+# Strings / i18n  (PATCH 1 — HEP Vaud)
+# Toutes les chaînes visibles par l'utilisateur sont regroupées ici pour faciliter la traduction.
+# Note : operationTitle[] et operationDescription[] sont déjà des tableaux associatifs
+# centralisés dans la section Global Variables — les modifier directement là-bas pour traduire.
+#
+####################################################################################################
+
+# --- Boutons communs ---
+STR_BTN_CONTINUE="Continuer"
+STR_BTN_CANCEL="Annuler"
+STR_BTN_RUN="Exécuter"
+STR_BTN_CONFIRM="Confirmer"
+STR_BTN_CLOSE="Fermer"
+STR_BTN_DONE="Terminé"
+STR_BTN_LATER="Plus tard"
+
+# --- Intro dialog ---
+STR_INTRO_MESSAGE="Cet outil peut résoudre les problèmes liés à Microsoft 365 sur ce Mac :\n- Réparer\n- Réinitialiser\n- Supprimer\n\nCliquez sur **Continuer** pour choisir les actions ; cliquez sur **Annuler** pour quitter."
+
+# --- Selection dialog ---
+STR_SELECTION_BASE_MESSAGE="Sélectionnez une ou plusieurs opérations de réinitialisation / suppression.\n\nNote : choisir **Supprimer complètement Microsoft 365** désactive les options de réinitialisation."
+STR_SELECTION_WARNING="**Attention :** veuillez sélectionner au moins _une_ option avant de cliquer sur **Exécuter**."
+
+# --- Reinstall option dialog (PATCH 2) ---
+STR_REINSTALL_TITLE="Réinstaller les applications ?"
+STR_REINSTALL_MESSAGE="Souhaitez-vous **réinstaller** les applications nécessitant une réparation ?\n\nCela télécharge le dernier package depuis Microsoft. Ignorez pour effectuer uniquement le nettoyage des caches et de la configuration."
+STR_BTN_REINSTALL="Réinstaller si nécessaire"
+STR_BTN_SKIP_REINSTALL="Ignorer la réinstallation"
+
+# --- Destructive confirmation dialog ---
+STR_DESTRUCTIVE_TITLE="Confirmer les actions destructives"
+STR_DESTRUCTIVE_MESSAGE="**:red[Attention :]** Vous avez sélectionné une ou plusieurs actions destructives pouvant supprimer définitivement des données locales.\n\nConfirmez pour continuer."
+STR_DESTRUCTIVE_CHECKBOX="Je comprends que ces actions sont irréversibles"
+
+# --- Progress dialog ---
+STR_PROGRESS_STARTING="Démarrage ..."
+STR_PROGRESS_HEADER="Les opérations suivantes vont s'exécuter :"
+STR_PROGRESS_EMPTY="Exécution des opérations sélectionnées ..."
+STR_PROGRESS_CONTINUING="Poursuite en cours ..."
+STR_PROGRESS_COMPLETED_TEXT="Terminé"
+STR_PROGRESS_RUNNING="Exécution de"
+STR_PROGRESS_DONE="Terminé"
+STR_PROGRESS_PREINSTALL_FAILED="Échec du préinstall remove_office | Durée :"
+
+# --- Completion dialog ---
+STR_COMPLETION_HEADER="**Résultats**"
+STR_COMPLETION_COMPLETED_OPS="Opérations réussies :"
+STR_COMPLETION_FAILED_OPS="Opérations échouées :"
+STR_COMPLETION_ELAPSED="Durée totale :"
+STR_COMPLETION_FAILED_IDS="IDs en échec :"
+
+# --- Log out dialog (PATCH 3 — remplace Restart) ---
+STR_LOGOUT_TITLE="Déconnexion recommandée"
+STR_LOGOUT_MESSAGE="**Une déconnexion est recommandée après toute réinitialisation ou suppression.**\n\nSouhaitez-vous vous déconnecter maintenant ?"
+STR_BTN_LOGOUT_NOW="Se déconnecter"
+
+# --- App quit prompts (utiliser avec printf "STR" "AppName") ---
+STR_QUIT_PLEASE="Veuillez enregistrer vos fichiers ouverts et quitter %s."
+STR_QUIT_WAITING="En attente de la fermeture de %s ..."
+STR_QUIT_DONE="%s est maintenant fermé."
+
+# --- Adobe Acrobat add-in ---
+STR_ACROBAT_PLEASE_QUIT="Veuillez fermer Word, Excel, PowerPoint et Acrobat avant la suppression."
+STR_ACROBAT_VERIFYING="Vérification que les applications requises sont fermées ..."
+STR_ACROBAT_REMOVING="Suppression des fichiers du module Adobe Acrobat ..."
+
+
 
 
 
@@ -356,15 +453,6 @@ function appendFailure() {
 function appendCompletion() {
     local op="$1"
     completedOperations+=("${op}")
-}
-
-function appendRepairedOperation() {
-    local op="$1"
-    local item
-    for item in "${repairedOperations[@]}"; do
-        [[ "${item}" == "${op}" ]] && return 0
-    done
-    repairedOperations+=("${op}")
 }
 
 function findKeychainDB() {
@@ -591,6 +679,17 @@ function maybeRepairOfficeApp() {
     local manifestProductID="$5"
     local osVersion="$6"
 
+    # ── PATCH 2 HEP : skip repair/reinstall si autoRepairEnabled=false ──────
+    if [[ "${autoRepairEnabled}" != "true" ]]; then
+        if [[ ! -d "${appPath}" ]]; then
+            info "${appName} not found in default location; skipping (auto-repair disabled)"
+            return 0
+        fi
+        info "Auto-repair disabled — skipping version/codesign check for ${appName}; proceeding with cleanup"
+        return 0
+    fi
+    # ────────────────────────────────────────────────────────────────────────
+
     local appVersion
     local appGeneration="2019"
     local customInfo
@@ -655,7 +754,7 @@ function maybeRepairOfficeApp() {
     fi
 
     if [[ "${repairPerformed}" == "true" ]]; then
-        info "${appName} repair completed; skipping configuration cleanup for this run as a documented divergence from MOFA"
+        info "${appName} repair completed; skipping configuration cleanup to match MOFA behavior"
         return 2
     fi
 
@@ -730,6 +829,42 @@ function writeDialogCommand() {
     fi
 }
 
+
+function askReinstallOption() {
+    # PATCH 2 HEP : dialog pour activer ou non la réinstallation auto
+    # Seulement en mode interactif et si au moins une opération peut déclencher un repair
+    [[ "${operationMode}" == "silent" ]] && return 0
+
+    local hasRepairOp="false"
+    local op
+    for op in "${autoRepairOps[@]}"; do
+        if isOperationSelected "${op}"; then
+            hasRepairOp="true"
+            break
+        fi
+    done
+    [[ "${hasRepairOp}" == "false" ]] && return 0
+
+    local rc
+    ${dialogBinary} \
+        --title "${STR_REINSTALL_TITLE}" \
+        --infotext "${scriptVersion}" \
+        --messagefont "size=${fontSize}" \
+        --message "${STR_REINSTALL_MESSAGE}" \
+        --icon "SF=arrow.down.app.fill, weight=bold, colour1=#0078D4" \
+        --button1text "${STR_BTN_REINSTALL}" \
+        --button2text "${STR_BTN_SKIP_REINSTALL}" 2>/dev/null
+
+    rc=$?
+    if [[ ${rc} -eq 0 ]]; then
+        autoRepairEnabled="true"
+        info "User enabled auto-repair/reinstall"
+    else
+        autoRepairEnabled="false"
+        info "User skipped auto-repair/reinstall — cleanup only"
+    fi
+}
+
 function formattedElapsedTime() {
     printf '%dh:%dm:%ds' $((SECONDS/3600)) $((SECONDS%3600/60)) $((SECONDS%60))
 }
@@ -741,20 +876,18 @@ function showIntroDialog() {
         --title "${humanReadableScriptName}" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message "This tool _may_ help address Microsoft 365-related issues on this Mac:\n- Repair\n- Reset\n- Remove\n\nClick **Continue** to select actions; click **Cancel** to exit." \
+        --message "${STR_INTRO_MESSAGE}" \
         --icon "${applicationIcon}" \
         --overlayicon "${organizationOverlayiconURL}" \
-        --button1text "Continue" \
-        --button2text "Cancel" \
+        --button1text "${STR_BTN_CONTINUE}" \
+        --button2text "${STR_BTN_CANCEL}" \
         --quitkey q
 
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
         info "User '${loggedInUser}' cancelled intro dialog"
-        return "${interactiveCancelReturnCode}"
+        exit 2
     fi
-
-    return 0
 }
 
 function parseOperationCSV() {
@@ -812,7 +945,7 @@ function showSelectionDialog() {
         checkboxArgs+=(--checkbox "${operationTitle[${op}]},name=${op},icon=${operationIcon[${op}]}")
     done
 
-    baseMessage="Select one or more reset / removal operations.\n\nNote: Choosing **Completely remove Microsoft 365** suppresses reset-related actions."
+    baseMessage="${STR_SELECTION_BASE_MESSAGE}"
 
     while true; do
         messageText="${baseMessage}"
@@ -828,14 +961,14 @@ function showSelectionDialog() {
             --icon "https://usw2.ics.services.jamfcloud.com/icon/hash_a0bc0557b531bc5d2713dece4f513df1ac5038ff55ebf5115edf43b951f916c7" \
             --checkboxstyle "switch,large" \
             --json \
-            --button1text "Run" \
-            --button2text "Cancel" \
+            --button1text "${STR_BTN_RUN}" \
+            --button2text "${STR_BTN_CANCEL}" \
             "${checkboxArgs[@]}" 2>/dev/null)"
 
         rc=$?
         if [[ ${rc} -ne 0 ]]; then
             info "User '${loggedInUser}' cancelled selection dialog"
-            return "${interactiveCancelReturnCode}"
+            exit 2
         fi
 
         parseDialogSelections "${dialogOutput}"
@@ -844,7 +977,7 @@ function showSelectionDialog() {
         fi
 
         warning "No operations selected in picker; re-showing selection dialog"
-        warningMessage="**Warning:** Please select at least _one_ option before clicking **Run**."
+        warningMessage="${STR_SELECTION_WARNING}"
     done
 }
 
@@ -859,7 +992,6 @@ function resolveDependencies() {
         addOperationUnique reset_onenote
         addOperationUnique reset_onedrive
         addOperationUnique reset_teams
-        addOperationUnique reset_autoupdate
         addOperationUnique reset_credentials
     fi
 
@@ -894,13 +1026,12 @@ function resolveDependencies() {
     fi
 
     if hasOperation "remove_office"; then
-        addOperationUnique remove_skypeforbusiness
 
         # remove_office suppresses reset-family selections to match Distribution behavior.
         local retained=()
         for op in "${selectedOperations[@]}"; do
             case "${op}" in
-                reset_factory|reset_word|reset_excel|reset_powerpoint|reset_outlook|reset_onenote|reset_onedrive|reset_teams|reset_teams_force|reset_autoupdate|reset_license|reset_credentials)
+                reset_factory|reset_word|reset_excel|reset_powerpoint|reset_outlook|reset_onenote|reset_onedrive|reset_teams|reset_teams_force|reset_license|reset_credentials)
                     ;;
                 *)
                     retained+=("${op}")
@@ -909,7 +1040,6 @@ function resolveDependencies() {
         done
         selectedOperations=("${retained[@]}")
         addOperationUnique remove_office
-        addOperationUnique remove_skypeforbusiness
     fi
 
     resolvedOperations=("${selectedOperations[@]}")
@@ -925,12 +1055,12 @@ function confirmDestructiveSelection() {
     [[ "${operationMode}" == "silent" ]] && return 0
 
     ${dialogBinary} \
-        --title "Confirm Destructive Actions" \
+        --title "${STR_DESTRUCTIVE_TITLE}" \
         --infotext "${scriptVersion}" \
         --messagefont "size=${fontSize}" \
-        --message "**:red[Warning:]** You selected one or more destructive actions that can permanently remove local data.\n\nConfirm to proceed." \
+        --message "${STR_DESTRUCTIVE_MESSAGE}" \
         --icon "SF=exclamationmark.triangle, weight=bold, colour1=red" \
-        --checkbox "I understand these actions are destructive,name=confirm_destructive,enableButton1" \
+        --checkbox "${STR_DESTRUCTIVE_CHECKBOX},name=confirm_destructive,enableButton1" \
         --json \
         --button1text "Confirm" \
         --button1disabled \
@@ -939,15 +1069,13 @@ function confirmDestructiveSelection() {
     local rc=$?
     if [[ ${rc} -ne 0 ]]; then
         info "User '${loggedInUser}' cancelled destructive confirmation"
-        return "${interactiveCancelReturnCode}"
+        exit 2
     fi
 
     if ! grep -Eiq 'confirm_destructive\"?[[:space:]]*:[[:space:]]*(true|1|yes)' "${workDirectory}/destructive.json"; then
         info "Destructive confirmation checkbox not acknowledged"
         exit 2
     fi
-
-    return 0
 }
 
 function startProgressDialog() {
@@ -974,18 +1102,18 @@ function startProgressDialog() {
         --commandfile "${dialogCommandFile}" \
         --button1disabled \
         --progress 100 \
-        --progresstext "Starting ..." &
+        --progresstext "${STR_PROGRESS_STARTING}" &
 
     dialogPID=$!
     sleep 1
 }
 
 function progressDialogMessage() {
-    local message="The following operations will run:"
+    local message="${STR_PROGRESS_HEADER}"
     local op
 
     if [[ ${#resolvedOperations[@]} -eq 0 ]]; then
-        echo "Running selected operations ..."
+        echo "${STR_PROGRESS_EMPTY}"
         return 0
     fi
 
@@ -1031,9 +1159,9 @@ function updateCompletedProgressDialog() {
 function finishProgressDialog() {
     [[ "${operationMode}" == "silent" ]] && return 0
     writeDialogCommand "progress: complete"
-    writeDialogCommand "button1text: Done"
+    writeDialogCommand "button1text: ${STR_BTN_DONE}"
     writeDialogCommand "button1: enable"
-    writeDialogCommand "progresstext: Completed"
+    writeDialogCommand "progresstext: ${STR_PROGRESS_COMPLETED_TEXT}"
     sleep 1
     writeDialogCommand "quit:"
     waitForProgressDialog
@@ -1042,19 +1170,10 @@ function finishProgressDialog() {
 function showCompletionDialog() {
     [[ "${operationMode}" == "silent" ]] && return 0
 
-    local summary="**Results**<br><br>- Completed operations: ${#completedOperations[@]}<br>- Failed operations: ${#failedOperations[@]}<br>- Elapsed Time: $(formattedElapsedTime)"
-    local repairedTitles=()
-    local op
+    local summary="${STR_COMPLETION_HEADER}<br><br>- ${STR_COMPLETION_COMPLETED_OPS} ${#completedOperations[@]}<br>- ${STR_COMPLETION_FAILED_OPS} ${#failedOperations[@]}<br>- ${STR_COMPLETION_ELAPSED} $(formattedElapsedTime)"
 
     if [[ ${#failedOperations[@]} -gt 0 ]]; then
-        summary+="<br><br>Failed IDs: ${failedOperations[*]}"
-    fi
-
-    if [[ ${#repairedOperations[@]} -gt 0 ]]; then
-        for op in "${repairedOperations[@]}"; do
-            repairedTitles+=("${operationTitle[${op}]}")
-        done
-        summary+="<br><br>Repaired this run; cleanup deferred until a later run: ${(j:, :)repairedTitles}"
+        summary+="<br><br>${STR_COMPLETION_FAILED_IDS} ${failedOperations[*]}"
     fi
 
     ${dialogBinary} \
@@ -1063,7 +1182,7 @@ function showCompletionDialog() {
         --messagefont "size=${fontSize}" \
         --message "${summary}" \
         --icon "SF=checkmark.circle.fill, weight=bold, colour1=#00ff44, colour2=#075c1e" \
-        --button1text "Close"
+        --button1text "${STR_BTN_CLOSE}"
 }
 
 function executeRestartAction() {
@@ -1071,6 +1190,19 @@ function executeRestartAction() {
     local restartCommand=""
 
     case "${effectiveRestartMode}" in
+
+        # ── PATCH 3 HEP : Log out ─────────────────────────────────────────
+        Logout)
+            if runAsUser "${loggedInUser}" /usr/bin/osascript \
+                -e 'tell app "loginwindow" to «event aevtlgot»' >>"${scriptLog}" 2>&1; then
+                notice "Log out command sent for ${loggedInUser}."
+                return 0
+            fi
+            warning "Failed to invoke log out for ${loggedInUser}."
+            return 1
+            ;;
+        # ─────────────────────────────────────────────────────────────────
+
         Restart)
             restartCommand="sleep 1 && shutdown -r now &"
             if /bin/zsh -c "${restartCommand}" >>"${scriptLog}" 2>&1; then
@@ -1092,22 +1224,24 @@ function executeRestartAction() {
 }
 
 function promptForRestart() {
+    # PATCH 3 HEP : Log out recommandé (pas de restart complet nécessaire)
+    # Le nom de la fonction est conservé pour ne pas casser les appels existants.
     if [[ "${restartPromptEnabled}" != "true" ]] || [[ "${operationMode}" == "silent" ]]; then
         return 0
     fi
 
     local rc
-    local restartFontSize=$(( fontSize > 2 ? fontSize - 2 : fontSize ))
+    local msgFontSize=$(( fontSize > 2 ? fontSize - 2 : fontSize ))
 
     ${dialogBinary} \
-        --title "Restart Recommended" \
+        --title "${STR_LOGOUT_TITLE}" \
         --infotext "${scriptVersion}" \
-        --messagefont "size=${restartFontSize}" \
-        --message "**A restart is recommended after performing any reset or removal.**\n\nWould you like to restart now?" \
-        --icon "SF=restart.circle.fill,colour=#969899" \
+        --messagefont "size=${msgFontSize}" \
+        --message "${STR_LOGOUT_MESSAGE}" \
+        --icon "SF=person.crop.circle.badge.xmark, weight=bold, colour1=#969899" \
         --buttonstyle "stack" \
-        --button1text "Restart Now" \
-        --button2text "Later" \
+        --button1text "${STR_BTN_LOGOUT_NOW}" \
+        --button2text "${STR_BTN_LATER}" \
         --height 400 \
         --width 400 2>/dev/null
 
@@ -1115,14 +1249,14 @@ function promptForRestart() {
 
     case "${rc}" in
         0)
-            notice "User chose to restart now"
-            executeRestartAction "Restart Confirm"
+            notice "User chose to log out now"
+            executeRestartAction "Logout"
             ;;
         2)
-            notice "User chose to restart later"
+            notice "User chose to log out later"
             ;;
         *)
-            warning "Restart prompt exited with unexpected return code: ${rc}; no restart action taken"
+            warning "Log out prompt exited with unexpected return code: ${rc}; no action taken"
             ;;
     esac
 }
@@ -1149,15 +1283,15 @@ function waitForInteractiveAppQuit() {
     info "Waiting for ${appName} to quit before continuing"
 
     [[ -n "${appIcon}" ]] && writeDialogCommand "icon: ${appIcon}"
-    writeDialogCommand "message: Please save open files and quit ${appName}."
-    writeDialogCommand "progresstext: Waiting for ${loggedInUser} to quit ${appName} ..."
+    writeDialogCommand "message: $(printf \"${STR_QUIT_PLEASE}\" \"${appName}\")"
+    writeDialogCommand "progresstext: $(printf \"${STR_QUIT_WAITING}\" \"${appName}\")"
 
     while pgrep -x "${processName}" >/dev/null 2>&1; do
         sleep 1
     done
 
-    writeDialogCommand "message: ${appName} is no longer running."
-    writeDialogCommand "progresstext: Continuing ..."
+    writeDialogCommand "message: $(printf \"${STR_QUIT_DONE}\" \"${appName}\")"
+    writeDialogCommand "progresstext: ${STR_PROGRESS_CONTINUING}"
 }
 
 function prepareForAcrobatAddinRemoval() {
@@ -1170,8 +1304,8 @@ function prepareForAcrobatAddinRemoval() {
         return 0
     fi
 
-    writeDialogCommand "message: Please quit Word, Excel, PowerPoint, and Acrobat before removal."
-    writeDialogCommand "progresstext: Verifying required apps are closed ..."
+    writeDialogCommand "message: ${STR_ACROBAT_PLEASE_QUIT}"
+    writeDialogCommand "progresstext: ${STR_ACROBAT_VERIFYING}"
 
     waitForInteractiveAppQuit "Microsoft Word" "Microsoft Word" "/Applications/Microsoft Word.app"
     waitForInteractiveAppQuit "Microsoft Excel" "Microsoft Excel" "/Applications/Microsoft Excel.app"
@@ -1180,7 +1314,7 @@ function prepareForAcrobatAddinRemoval() {
 
     writeDialogCommand "icon: SF=gearshape.2.fill, weight=bold, colour1=#FF7D08, colour2=#FF0810"
     writeDialogCommand "message: Removing Adobe Acrobat add-in payloads ..."
-    writeDialogCommand "progresstext: Removing Adobe Acrobat add-in payloads ..."
+    writeDialogCommand "progresstext: ${STR_ACROBAT_REMOVING}"
 }
 
 function stopCommonOfficeProcesses() {
@@ -1546,10 +1680,7 @@ function op_reset_word() {
         "${osVersion}"
     local repairRC=$?
     [[ ${repairRC} -eq 1 ]] && return 1
-    if [[ ${repairRC} -eq 2 ]]; then
-        appendRepairedOperation reset_word
-        return 0
-    fi
+    [[ ${repairRC} -eq 2 ]] && return 0
 
     safeRemove "/Library/Preferences/com.microsoft.Word.plist"
     safeRemove "/Library/Managed Preferences/com.microsoft.Word.plist"
@@ -1590,10 +1721,7 @@ function op_reset_excel() {
         "${osVersion}"
     local repairRC=$?
     [[ ${repairRC} -eq 1 ]] && return 1
-    if [[ ${repairRC} -eq 2 ]]; then
-        appendRepairedOperation reset_excel
-        return 0
-    fi
+    [[ ${repairRC} -eq 2 ]] && return 0
 
     safeRemove "/Library/Preferences/com.microsoft.Excel.plist"
     safeRemove "/Library/Managed Preferences/com.microsoft.Excel.plist"
@@ -1639,10 +1767,7 @@ function op_reset_powerpoint() {
         "${osVersion}"
     local repairRC=$?
     [[ ${repairRC} -eq 1 ]] && return 1
-    if [[ ${repairRC} -eq 2 ]]; then
-        appendRepairedOperation reset_powerpoint
-        return 0
-    fi
+    [[ ${repairRC} -eq 2 ]] && return 0
 
     safeRemove "/Library/Preferences/com.microsoft.Powerpoint.plist"
     safeRemove "/Library/Managed Preferences/com.microsoft.Powerpoint.plist"
@@ -1688,10 +1813,7 @@ function op_reset_outlook() {
         "${osVersion}"
     local repairRC=$?
     [[ ${repairRC} -eq 1 ]] && return 1
-    if [[ ${repairRC} -eq 2 ]]; then
-        appendRepairedOperation reset_outlook
-        return 0
-    fi
+    [[ ${repairRC} -eq 2 ]] && return 0
 
     safeRemove "/Library/Preferences/com.microsoft.Outlook.plist"
     safeRemove "/Library/Managed Preferences/com.microsoft.Outlook.plist"
@@ -1765,10 +1887,7 @@ function op_reset_onenote() {
         "${osVersion}"
     local repairRC=$?
     [[ ${repairRC} -eq 1 ]] && return 1
-    if [[ ${repairRC} -eq 2 ]]; then
-        appendRepairedOperation reset_onenote
-        return 0
-    fi
+    [[ ${repairRC} -eq 2 ]] && return 0
 
     safeRemove "/Library/Preferences/com.microsoft.onenote.mac.plist"
     safeRemove "/Library/Managed Preferences/com.microsoft.onenote.mac.plist"
@@ -1810,7 +1929,8 @@ function op_reset_onedrive() {
     pkill -9 'OneDriveStandaloneUpdater' 2>/dev/null
     pkill -9 'OneDriveUpdater' 2>/dev/null
 
-    if [[ -d "/Applications/OneDrive.app" ]]; then
+    # ── PATCH 2 HEP : repair uniquement si autoRepairEnabled=true ────────────
+    if [[ "${autoRepairEnabled}" == "true" && -d "/Applications/OneDrive.app" ]]; then
         local oneDriveVersion
         oneDriveVersion="$(defaults read /Applications/OneDrive.app/Contents/Info.plist CFBundleVersion 2>/dev/null)"
         if ! is-at-least 23154.0 "${oneDriveVersion}" && is-at-least 10.15 "${osVersion}"; then
@@ -1823,6 +1943,7 @@ function op_reset_onedrive() {
             repairFromMicrosoftPkg "Microsoft OneDrive" "https://go.microsoft.com/fwlink/?linkid=861011" "" || return 1
         fi
     fi
+    # ────────────────────────────────────────────────────────────────────────
 
     safeRemove "${loggedInUserHome}/Library/Caches/OneDrive"
     safeRemove "${loggedInUserHome}/Library/Caches/com.microsoft.OneDrive"
@@ -2161,7 +2282,8 @@ function op_reset_autoupdate() {
 
     defaults write /Library/Preferences/com.microsoft.autoupdate2 AcknowledgedDataCollectionPolicy -string 'RequiredDataOnly' >>"${scriptLog}" 2>&1
 
-    if [[ -d "${mauAppPath}" ]]; then
+    # ── PATCH 2 HEP : repair MAU uniquement si autoRepairEnabled=true ─────────
+    if [[ "${autoRepairEnabled}" == "true" && -d "${mauAppPath}" ]]; then
         local mauVersion
         mauVersion="$(defaults read "${mauAppPath}/Contents/Info.plist" CFBundleVersion 2>/dev/null)"
         if ! is-at-least 4.49 "${mauVersion}"; then
@@ -2175,6 +2297,7 @@ function op_reset_autoupdate() {
             repairFromMicrosoftPkg "Microsoft AutoUpdate" "https://go.microsoft.com/fwlink/?linkid=830196" "" || return 1
         fi
     fi
+    # ────────────────────────────────────────────────────────────────────────
 
     defaults write /Library/Preferences/com.microsoft.autoupdate2 ApplicationsSystem -dict-add "${mauAppPath}" "{ 'Application ID' = 'MSau04'; LCID = 1033 ; 'App Domain' = 'com.microsoft.office' ; }" >>"${scriptLog}" 2>&1
 
@@ -2328,6 +2451,86 @@ function op_reset_credentials() {
     resetOfficeLicenseCore || return 1
     resetOfficeExtendedSignInArtifacts || return 1
     finalizeOfficeCredentialReset || return 1
+    return 0
+}
+
+function op_creation_poste_examen() {
+    # ------------------------------------------------------------------------------
+    # PATCH 6 (HEP Vaud) — Exam station hardening
+    # ------------------------------------------------------------------------------
+    #
+    # Purpose
+    #   Prepare a Mac for use as a controlled-environment exam workstation by
+    #   neutralizing the two primary ways Microsoft Word can "assist" a student
+    #   during a written exam, and by preventing Office from changing its own
+    #   version mid-exam.
+    #
+    # What this operation does
+    #   1. Removes Word's Proofing Tools bundle
+    #      Path: /Applications/Microsoft Word.app/Contents/SharedSupport/Proofing Tools
+    #      This folder ships the spelling, grammar, hyphenation and thesaurus
+    #      dictionaries for every language Word supports on macOS. Removing it
+    #      disables the red/blue underlines and the Spelling & Grammar pane —
+    #      the student is left with a plain word processor. The removal is
+    #      in-place (safeRemove) because Word will silently restore the folder
+    #      the next time MAU runs; step 2 is therefore essential.
+    #
+    #   2. Freezes Microsoft AutoUpdate (MAU)
+    #      Path: /Library/Application Support/Microsoft/MAU2.0
+    #      A chmod 000 on the MAU2.0 folder prevents MAU from reading its own
+    #      bootstrapper and support files, which effectively disables all
+    #      Microsoft auto-update activity on the Mac. This is deliberately a
+    #      blunt instrument: it survives reboot, user switching and Office
+    #      relaunch, and it cannot be worked around from a standard user
+    #      session. It is fully reversible from Jamf with a single:
+    #          /bin/chmod 755 "/Library/Application Support/Microsoft/MAU2.0"
+    #      (a dedicated "release_poste_examen" Jamf policy is recommended).
+    #
+    # When to use this operation
+    #   Before a written or practical exam that must run inside Word on a
+    #   pooled HEP Vaud Mac, typically as part of an imaging / relocation flow
+    #   (see also "Deep Freeze replacement" golden-state workflow). It is NOT
+    #   part of the day-to-day reset workflow and should never be selected by
+    #   an end user in Self Service — deploy this via a tech-only Jamf policy.
+    #
+    # Safety notes
+    #   * Both actions are reversible; no user data is touched.
+    #   * No apps are killed here. Word should be closed by a preceding
+    #     operation (e.g. reset_word) if the exam station is being re-prepared
+    #     on a machine where Word is currently running.
+    #   * This operation is idempotent: re-running it on an already-prepared
+    #     Mac is a no-op (the paths are either already gone or already locked).
+    #
+    # Reverting an exam station
+    #   Run the companion "release_poste_examen" Jamf policy, which should:
+    #     1. chmod 755 on /Library/Application Support/Microsoft/MAU2.0
+    #     2. Trigger a Microsoft 365 reinstall policy to restore Proofing Tools
+    # ------------------------------------------------------------------------------
+
+    info "Starting operation: creation_poste_examen"
+
+    # Step 1 — remove Word's Proofing Tools (spell-check / grammar / thesaurus)
+    local proofingPath="/Applications/Microsoft Word.app/Contents/SharedSupport/Proofing Tools"
+    if [[ -d "${proofingPath}" ]]; then
+        info "Removing Word Proofing Tools: ${proofingPath}"
+        safeRemove "${proofingPath}"
+    else
+        info "Proofing Tools folder absent, nothing to remove"
+    fi
+
+    # Step 2 — lock down Microsoft AutoUpdate so Office cannot self-update mid-exam
+    local mauPath="/Library/Application Support/Microsoft/MAU2.0"
+    if [[ -d "${mauPath}" ]]; then
+        info "Locking Microsoft AutoUpdate: chmod 000 on ${mauPath}"
+        /bin/chmod 000 "${mauPath}" >>"${scriptLog}" 2>&1
+        if [[ $? -ne 0 ]]; then
+            warning "Unable to change permissions on ${mauPath}"
+            return 1
+        fi
+    else
+        info "MAU2.0 folder absent, nothing to lock"
+    fi
+
     return 0
 }
 
@@ -2509,12 +2712,10 @@ function runOperation() {
         reset_onedrive) op_reset_onedrive ;;
         reset_teams) op_reset_teams ;;
         reset_teams_force) op_reset_teams_force ;;
-        reset_autoupdate) op_reset_autoupdate ;;
         reset_license) op_reset_license ;;
         reset_credentials) op_reset_credentials ;;
+        creation_poste_examen) op_creation_poste_examen ;;
         remove_office) op_remove_office ;;
-        remove_skypeforbusiness) op_remove_skypeforbusiness ;;
-        remove_defender) op_remove_defender ;;
         remove_acrobat_addin) op_remove_acrobat_addin ;;
         remove_zoomplugin) op_remove_zoomplugin ;;
         remove_webexpt) op_remove_webexpt ;;
@@ -2530,7 +2731,7 @@ function sortOperationsByExecutionPhase() {
     local op
 
     # reset operations
-    for op in reset_factory reset_word reset_excel reset_powerpoint reset_outlook reset_onenote reset_onedrive reset_teams reset_teams_force reset_autoupdate reset_license reset_credentials; do
+    for op in reset_factory reset_word reset_excel reset_powerpoint reset_outlook reset_onenote reset_onedrive reset_teams reset_teams_force reset_license reset_credentials; do
         isOperationSelected "${op}" && sorted+=("${op}")
     done
 
@@ -2540,7 +2741,7 @@ function sortOperationsByExecutionPhase() {
     done
 
     # ancillary removals
-    for op in remove_defender remove_acrobat_addin remove_zoomplugin remove_webexpt remove_skypeforbusiness; do
+    for op in creation_poste_examen remove_acrobat_addin remove_zoomplugin remove_webexpt; do
         isOperationSelected "${op}" && sorted+=("${op}")
     done
 
@@ -2603,32 +2804,13 @@ function validateSelectedOperations() {
 function main() {
     preflightChecks
 
-    showIntroDialog
-    local dialogRC=$?
-    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
-        exit 0
-    elif [[ ${dialogRC} -ne 0 ]]; then
-        exit "${dialogRC}"
-    fi
-
     showSelectionDialog
-    dialogRC=$?
-    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
-        exit 0
-    elif [[ ${dialogRC} -ne 0 ]]; then
-        exit "${dialogRC}"
-    fi
-
     validateSelectedOperations
     resolveDependencies
     sortOperationsByExecutionPhase
     confirmDestructiveSelection
-    dialogRC=$?
-    if [[ ${dialogRC} -eq ${interactiveCancelReturnCode} ]]; then
-        exit 0
-    elif [[ ${dialogRC} -ne 0 ]]; then
-        exit "${dialogRC}"
-    fi
+
+    askReinstallOption    # PATCH 2 HEP : demander si réinstallation souhaitée
 
     info "Resolved operations: ${resolvedOperations[*]}"
 
@@ -2640,15 +2822,15 @@ function main() {
     if isOperationSelected remove_office; then
         ((total++))
         ((index++))
-        updateProgressDialog "${index}" "${total}" "Running remove_office preinstall (${index}/${total})"
+        updateProgressDialog "${index}" "${total}" "${STR_PROGRESS_RUNNING} remove_office preinstall (${index}/${total})"
 
         info "Executing remove_office preinstall phase"
         if ! removeOfficePreinstall; then
             appendFailure remove_office
             errorOut "remove_office preinstall phase failed"
 
-            writeDialogCommand "progresstext: remove_office preinstall failed | Elapsed Time: $(formattedElapsedTime)"
-            writeDialogCommand "button1text: Close"
+            writeDialogCommand "progresstext: ${STR_PROGRESS_PREINSTALL_FAILED} $(formattedElapsedTime)"
+            writeDialogCommand "button1text: ${STR_BTN_CLOSE}"
             writeDialogCommand "button1: enable"
             sleep 1
             writeDialogCommand "quit:"
@@ -2664,7 +2846,7 @@ function main() {
     local op
     for op in "${resolvedOperations[@]}"; do
         ((index++))
-        updateProgressDialog "${index}" "${total}" "Running ${op} (${index}/${total})"
+        updateProgressDialog "${index}" "${total}" "${STR_PROGRESS_RUNNING} ${op} (${index}/${total})"
 
         if runOperation "${op}"; then
             appendCompletion "${op}"
@@ -2674,7 +2856,7 @@ function main() {
             errorOut "Operation failed: ${op}"
         fi
 
-        updateCompletedProgressDialog "${index}" "${total}" "Completed ${op} (${index}/${total})"
+        updateCompletedProgressDialog "${index}" "${total}" "${STR_PROGRESS_DONE} ${op} (${index}/${total})"
     done
 
     finishProgressDialog
